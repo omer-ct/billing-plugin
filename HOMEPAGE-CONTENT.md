@@ -1,4 +1,4 @@
-# Homepage Content for Black Rock Billing
+# Homepage Content for Billing Plugin
 
 ## Option 1: Short & Professional
 
@@ -22,7 +22,7 @@ Manage all your customer bills, track payments, and provide your clients with ea
 
 ### Complete Billing Solution for Your Business
 
-**Black Rock Billing** is a powerful WordPress billing system designed to simplify your invoicing workflow. Create professional bills, track payments, and keep your customers informed—all from one integrated platform.
+**Billing** is a powerful WordPress billing system designed to simplify your invoicing workflow. Create professional bills, track payments, and keep your customers informed—all from one integrated platform.
 
 **What You Get:**
 
@@ -70,9 +70,9 @@ Manage all your customer bills, track payments, and provide your clients with ea
 
 ### Take Control of Your Billing
 
-Stop juggling spreadsheets and paper invoices. **Black Rock Billing** gives you a professional billing system that saves time and keeps your customers happy.
+Stop juggling spreadsheets and paper invoices. **Billing** gives you a professional billing system that saves time and keeps your customers happy.
 
-**Why Choose Black Rock Billing?**
+**Why Choose Billing?**
 
 🎯 **Save Time**
 Create bills in seconds, not minutes. Our streamlined interface lets you generate professional invoices quickly.
@@ -102,7 +102,7 @@ Your customers can access their billing dashboard from any device, anytime.
 
 ### Professional Billing Made Simple
 
-**Black Rock Billing** helps you create, manage, and track customer bills effortlessly.
+**Billing** helps you create, manage, and track customer bills effortlessly.
 
 **Features:**
 - Create bills with multiple items
@@ -122,7 +122,7 @@ Perfect for businesses of all sizes who need a reliable billing solution.
 
 ### The Complete Billing Solution for WordPress
 
-**Black Rock Billing** transforms your WordPress site into a powerful billing platform. Create professional invoices, manage customer accounts, and streamline your payment tracking—all without leaving WordPress.
+**Billing** transforms your WordPress site into a powerful billing platform. Create professional invoices, manage customer accounts, and streamline your payment tracking—all without leaving WordPress.
 
 **Core Features:**
 
@@ -184,7 +184,7 @@ Perfect for businesses of all sizes who need a reliable billing solution.
 
 Create professional bills. Track payments. Keep customers informed.
 
-**Black Rock Billing** - The WordPress billing solution that grows with your business.
+**Billing** - The WordPress billing solution that grows with your business.
 
 [Get Started]
 

@@ -1,11 +1,11 @@
 <?php
 /**
- * Plugin Name: Black Rock Billing
- * Plugin URI: https://blackrockbilling.com
+ * Plugin Name: Billing
+ * Plugin URI: https://github.com/omer-ct/billing-plugin
  * Description: A comprehensive billing system for managing customer bills, payments, and invoices.
  * Version: 1.0.0
- * Author: Black Rock Billing
- * Author URI: https://blackrockbilling.com
+ * Author: Omer Muhammad
+ * Author URI: https://www.linkedin.com/in/omer-muhammad-14b64929b/
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: black-rock-billing

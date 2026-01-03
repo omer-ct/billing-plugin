@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Black Rock Billing plugin provides comprehensive frontend functionality for both customers and administrators to manage bills directly from the frontend of your website.
+The Billing plugin provides comprehensive frontend functionality for both customers and administrators to manage bills directly from the frontend of your website.
+
+**Repository**: [https://github.com/omer-ct/billing-plugin](https://github.com/omer-ct/billing-plugin)
 
 ## Frontend Routes
 

@@ -1,6 +1,8 @@
-# Black Rock Billing Plugin
+# Billing Plugin
 
 A comprehensive billing system for WordPress that allows you to create and manage customer bills, track payments, and provide customers with a dashboard to view their billing history.
+
+**Repository**: [https://github.com/omer-ct/billing-plugin](https://github.com/omer-ct/billing-plugin)
 
 ## Features
 
@@ -88,7 +90,10 @@ The plugin is designed to work with the Blocksy theme and follows WordPress codi
 
 ## Support
 
-For support and feature requests, please contact the plugin developer.
+For support and feature requests, please visit the [GitHub repository](https://github.com/omer-ct/billing-plugin) or contact the plugin developer.
+
+**Developer**: Omer Muhammad  
+**LinkedIn**: [https://www.linkedin.com/in/omer-muhammad-14b64929b/](https://www.linkedin.com/in/omer-muhammad-14b64929b/)
 
 ## License
 
