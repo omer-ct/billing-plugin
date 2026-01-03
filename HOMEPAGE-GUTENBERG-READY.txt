@@ -1,0 +1,39 @@
+=== COPY THIS FOR GUTENBERG ===
+
+Complete Billing Solution for Your Business
+
+Black Rock Billing is a powerful WordPress billing system designed to simplify your invoicing workflow. Create professional bills, track payments, and keep your customers informed—all from one integrated platform.
+
+What You Get:
+
+Easy Bill Creation
+• Create bills in minutes with our intuitive interface
+• Add multiple items with quantity and rate
+• Automatic total calculations
+• Auto-generated bill numbers
+
+Payment Tracking
+• Track paid and pending amounts for each bill
+• Real-time payment status updates
+• Complete payment history
+
+Customer Portal
+• Customers can view all their bills online
+• See payment summaries and pending amounts
+• Download bills as PDF
+• Access from any device
+
+Smart Features
+• Search and filter bills instantly
+• Email notifications for bill updates
+• Professional PDF generation
+• Complete customer management
+
+Admin Dashboard
+• View all bills and customers at a glance
+• Quick access to create new bills
+• Customer statistics and insights
+• Customizable settings
+
+Perfect for service providers, small businesses, freelancers, consultants, and any business that needs professional billing.
+
