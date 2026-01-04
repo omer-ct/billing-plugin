@@ -30,6 +30,7 @@ class BRB_Frontend {
         add_action('wp_ajax_brb_save_returns', array($this, 'ajax_save_returns'));
         add_action('wp_ajax_brb_update_bill', array($this, 'ajax_update_bill'));
         add_action('wp_ajax_brb_save_customer', array($this, 'ajax_save_customer'));
+        add_action('wp_ajax_brb_import_invoices_csv', array($this, 'ajax_import_invoices_csv'));
         
         // PDF download
         add_action('init', array($this, 'handle_pdf_download'));
@@ -53,6 +54,7 @@ class BRB_Frontend {
         add_rewrite_rule('^billing-dashboard/customers/add/?$', 'index.php?brb_page=customer-add', 'top');
         add_rewrite_rule('^billing-dashboard/customers/edit/([0-9]+)/?$', 'index.php?brb_page=customer-edit&brb_customer_id=$matches[1]', 'top');
         add_rewrite_rule('^billing-dashboard/settings/?$', 'index.php?brb_page=settings', 'top');
+        add_rewrite_rule('^billing-dashboard/import/?$', 'index.php?brb_page=import', 'top');
     }
     
     /**
@@ -68,6 +70,11 @@ class BRB_Frontend {
             }
             
             BRB_PDF::generate_pdf($bill_id);
+        }
+        
+        // Handle CSV export
+        if (isset($_GET['brb_export_csv']) && $_GET['brb_export_csv'] === '1') {
+            $this->export_invoices_csv();
         }
     }
     
@@ -109,14 +116,14 @@ class BRB_Frontend {
                 
             case 'create':
                 if (!current_user_can('manage_options')) {
-                    wp_die(__('You do not have permission to create bills.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                    wp_die(__('You do not have permission to create invoices.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
                 }
                 $this->render_create_bill();
                 exit;
                 
             case 'edit':
                 if (!current_user_can('manage_options')) {
-                    wp_die(__('You do not have permission to edit bills.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                    wp_die(__('You do not have permission to edit invoices.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
                 }
                 $bill_id = intval(get_query_var('brb_bill_id'));
                 $this->render_edit_bill($bill_id);
@@ -164,6 +171,13 @@ class BRB_Frontend {
                 }
                 $customer_id = intval(get_query_var('brb_customer_id'));
                 $this->render_edit_customer($customer_id);
+                exit;
+                
+            case 'import':
+                if (!current_user_can('manage_options')) {
+                    wp_die(__('You do not have permission to import invoices.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                }
+                $this->render_import();
                 exit;
         }
     }
@@ -269,7 +283,7 @@ class BRB_Frontend {
                                 <line x1="12" y1="18" x2="12" y2="12"></line>
                                 <line x1="9" y1="15" x2="15" y2="15"></line>
                             </svg>
-                            <?php _e('Create Bill', 'black-rock-billing'); ?>
+                            <?php _e('Create Invoice', 'black-rock-billing'); ?>
                         </a>
                         <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -322,16 +336,36 @@ class BRB_Frontend {
             
             <div class="brb-bills-section">
                 <div class="brb-bills-header">
-                    <h2><?php _e('Your Bills', 'black-rock-billing'); ?></h2>
-                    <?php if (current_user_can('manage_options')): ?>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="button button-primary brb-create-bill-btn">
-                            <?php _e('Create New Bill', 'black-rock-billing'); ?>
-                        </a>
-                    <?php endif; ?>
+                    <h2><?php _e('Your Invoices', 'black-rock-billing'); ?></h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <?php if (!empty($bills)): ?>
+                            <a href="<?php echo esc_url(add_query_arg(array('brb_export_csv' => '1'), home_url('/billing-dashboard'))); ?>" class="button" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                <?php _e('Export CSV', 'black-rock-billing'); ?>
+                            </a>
+                        <?php endif; ?>
+                        <?php if (current_user_can('manage_options')): ?>
+                            <a href="<?php echo esc_url(home_url('/billing-dashboard/import')); ?>" class="button" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <?php _e('Import CSV', 'black-rock-billing'); ?>
+                            </a>
+                            <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="button button-primary brb-create-bill-btn">
+                                <?php _e('Create New Invoice', 'black-rock-billing'); ?>
+                            </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 
                 <div class="brb-search-filter">
-                    <input type="text" id="brb-search-bills" placeholder="<?php _e('Search by bill number, customer name, email, phone, date, or amount...', 'black-rock-billing'); ?>" class="brb-search-input" />
+                    <input type="text" id="brb-search-bills" placeholder="<?php _e('Search by invoice number, customer name, email, phone, date, or amount...', 'black-rock-billing'); ?>" class="brb-search-input" />
                     <select id="brb-filter-status" class="brb-filter-select">
                         <option value=""><?php _e('All Statuses', 'black-rock-billing'); ?></option>
                         <option value="draft"><?php _e('Draft', 'black-rock-billing'); ?></option>
@@ -344,12 +378,12 @@ class BRB_Frontend {
                 </div>
                 
                 <?php if (empty($bills)): ?>
-                    <p class="brb-no-bills"><?php _e('You don\'t have any bills yet.', 'black-rock-billing'); ?></p>
+                    <p class="brb-no-bills"><?php _e('You don\'t have any invoices yet.', 'black-rock-billing'); ?></p>
                 <?php else: ?>
                     <table class="brb-bills-table" id="brb-bills-table">
                         <thead>
                             <tr>
-                                <th><?php _e('Bill Number', 'black-rock-billing'); ?></th>
+                                <th><?php _e('Invoice Number', 'black-rock-billing'); ?></th>
                                 <th><?php _e('Customer', 'black-rock-billing'); ?></th>
                                 <th><?php _e('Date', 'black-rock-billing'); ?></th>
                                 <th><?php _e('Total', 'black-rock-billing'); ?></th>
@@ -408,7 +442,7 @@ class BRB_Frontend {
                                         </span>
                                     </td>
                                     <td style="text-align: center;">
-                                        <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill->ID)); ?>" class="brb-action-btn brb-action-view" title="<?php _e('View Bill', 'black-rock-billing'); ?>">
+                                        <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill->ID)); ?>" class="brb-action-btn brb-action-view" title="<?php _e('View Invoice', 'black-rock-billing'); ?>">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                                 <circle cx="12" cy="12" r="3"></circle>
@@ -431,7 +465,7 @@ class BRB_Frontend {
      */
     public function render_bill_view($bill_id) {
         if (!$bill_id || !brb_can_user_view_bill($bill_id)) {
-            wp_die(__('Bill not found or access denied.', 'black-rock-billing'), __('Error', 'black-rock-billing'), array('response' => 404));
+            wp_die(__('Invoice not found or access denied.', 'black-rock-billing'), __('Error', 'black-rock-billing'), array('response' => 404));
         }
         
         $bill = get_post($bill_id);
@@ -465,7 +499,7 @@ class BRB_Frontend {
                         </a>
                     <?php endif; ?>
                 </div>
-                <h1><?php _e('Bill Details', 'black-rock-billing'); ?></h1>
+                <h1><?php _e('Invoice Details', 'black-rock-billing'); ?></h1>
             </div>
             
             <div class="brb-bill-document">
@@ -475,8 +509,8 @@ class BRB_Frontend {
                         <p><?php bloginfo('description'); ?></p>
                     </div>
                     <div class="brb-bill-meta">
-                        <p><strong><?php _e('Bill Number:', 'black-rock-billing'); ?></strong> <?php echo esc_html($bill_number ?: 'N/A'); ?></p>
-                        <p><strong><?php _e('Bill Date:', 'black-rock-billing'); ?></strong> <?php echo $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '—'; ?></p>
+                        <p><strong><?php _e('Invoice Number:', 'black-rock-billing'); ?></strong> <?php echo esc_html($bill_number ?: 'N/A'); ?></p>
+                        <p><strong><?php _e('Invoice Date:', 'black-rock-billing'); ?></strong> <?php echo $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '—'; ?></p>
                         <p><strong><?php _e('Due Date:', 'black-rock-billing'); ?></strong> <?php echo $due_date ? date_i18n(get_option('date_format'), strtotime($due_date)) : '—'; ?></p>
                         <p><strong><?php _e('Status:', 'black-rock-billing'); ?></strong> 
                             <span class="brb-status brb-status-<?php echo esc_attr($status); ?>">
@@ -487,7 +521,7 @@ class BRB_Frontend {
                 </div>
                 
                 <div class="brb-bill-customer">
-                    <h3><?php _e('Bill To:', 'black-rock-billing'); ?></h3>
+                    <h3><?php _e('Invoice To:', 'black-rock-billing'); ?></h3>
                     <?php if ($customer): 
                         $phone = brb_get_customer_phone($customer_id);
                         $display_name = brb_format_customer_name($customer->display_name);
@@ -615,7 +649,7 @@ class BRB_Frontend {
                 <div class="brb-bill-actions">
                     <?php if (current_user_can('manage_options')): ?>
                         <a href="<?php echo esc_url(home_url('/billing-dashboard/edit/' . $bill_id)); ?>" class="brb-edit-bill">
-                            <?php _e('Edit Bill', 'black-rock-billing'); ?>
+                            <?php _e('Edit Invoice', 'black-rock-billing'); ?>
                         </a>
                     <?php endif; ?>
                     <a href="<?php echo esc_url(add_query_arg(array('brb_download_pdf' => '1', 'bill_id' => $bill_id), home_url())); ?>" class="brb-download-pdf">
@@ -736,7 +770,7 @@ class BRB_Frontend {
                             <line x1="12" y1="18" x2="12" y2="12"></line>
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
-                        <?php _e('Create Bill', 'black-rock-billing'); ?>
+                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -765,7 +799,7 @@ class BRB_Frontend {
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_bill_date"><?php _e('Bill Date', 'black-rock-billing'); ?></label>
+                            <label for="brb_bill_date"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
                             <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo date('Y-m-d'); ?>" required class="brb-form-input" />
                         </div>
                         
@@ -843,7 +877,7 @@ class BRB_Frontend {
                 </div>
                 
                 <div class="brb-form-actions">
-                    <button type="submit" class="button button-primary button-large"><?php _e('Create Bill', 'black-rock-billing'); ?></button>
+                    <button type="submit" class="button button-primary button-large"><?php _e('Create Invoice', 'black-rock-billing'); ?></button>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="button button-large"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                 </div>
                 
@@ -910,7 +944,7 @@ class BRB_Frontend {
         </script>
         <div class="brb-create-bill-container">
             <div class="brb-page-header">
-                <h1><?php _e('Edit Bill', 'black-rock-billing'); ?> - <?php echo esc_html($bill_number ?: '#' . $bill_id); ?></h1>
+                <h1><?php _e('Edit Invoice', 'black-rock-billing'); ?> - <?php echo esc_html($bill_number ?: '#' . $bill_id); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -926,7 +960,7 @@ class BRB_Frontend {
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
-                        <?php _e('View Bill', 'black-rock-billing'); ?>
+                        <?php _e('View Invoice', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -953,7 +987,7 @@ class BRB_Frontend {
                             <line x1="12" y1="18" x2="12" y2="12"></line>
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
-                        <?php _e('Create Bill', 'black-rock-billing'); ?>
+                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
                     </a>
                 </div>
             </div>
@@ -966,9 +1000,9 @@ class BRB_Frontend {
                     <h2><?php _e('Bill Information', 'black-rock-billing'); ?></h2>
                     
                     <div class="brb-form-row brb-form-row-full">
-                        <label for="brb_bill_number"><?php _e('Bill Number', 'black-rock-billing'); ?></label>
+                        <label for="brb_bill_number"><?php _e('Invoice Number', 'black-rock-billing'); ?></label>
                         <input type="text" id="brb_bill_number" name="brb_bill_number" value="<?php echo esc_attr($bill_number); ?>" readonly class="brb-form-input" />
-                        <p class="description"><?php _e('Bill number cannot be changed', 'black-rock-billing'); ?></p>
+                        <p class="description"><?php _e('Invoice number cannot be changed', 'black-rock-billing'); ?></p>
                     </div>
                     
                     <div class="brb-form-grid">
@@ -991,7 +1025,7 @@ class BRB_Frontend {
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_bill_date"><?php _e('Bill Date', 'black-rock-billing'); ?></label>
+                            <label for="brb_bill_date"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
                             <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo esc_attr($bill_date ?: date('Y-m-d')); ?>" required class="brb-form-input" />
                         </div>
                         
@@ -1558,7 +1592,7 @@ class BRB_Frontend {
                             <line x1="12" y1="18" x2="12" y2="12"></line>
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
-                        <?php _e('Create Bill', 'black-rock-billing'); ?>
+                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1572,10 +1606,30 @@ class BRB_Frontend {
             
             <div class="brb-bills-section">
                 <div class="brb-bills-header">
-                    <h2><?php _e('All Bills', 'black-rock-billing'); ?></h2>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="button button-primary brb-create-bill-btn">
-                        <?php _e('Create New Bill', 'black-rock-billing'); ?>
-                    </a>
+                    <h2><?php _e('All Invoices', 'black-rock-billing'); ?></h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <?php if (!empty($bills)): ?>
+                            <a href="<?php echo esc_url(add_query_arg(array('brb_export_csv' => '1'), home_url('/billing-dashboard/bills'))); ?>" class="button" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                <?php _e('Export CSV', 'black-rock-billing'); ?>
+                            </a>
+                        <?php endif; ?>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/import')); ?>" class="button" style="display: inline-flex; align-items: center; gap: 6px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <?php _e('Import CSV', 'black-rock-billing'); ?>
+                        </a>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="button button-primary brb-create-bill-btn">
+                            <?php _e('Create New Invoice', 'black-rock-billing'); ?>
+                        </a>
+                    </div>
                 </div>
                 
                 <?php if (empty($bills)): ?>
@@ -1586,11 +1640,11 @@ class BRB_Frontend {
                             <line x1="16" y1="13" x2="8" y2="13"></line>
                             <line x1="16" y1="17" x2="8" y2="17"></line>
                         </svg>
-                        <p><?php _e('No bills found.', 'black-rock-billing'); ?></p>
+                        <p><?php _e('No invoices found.', 'black-rock-billing'); ?></p>
                         <?php if (current_user_can('manage_options')): ?>
                             <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">
                                 <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" style="color: #3b82f6; text-decoration: none; font-weight: 600;">
-                                    <?php _e('Create your first bill →', 'black-rock-billing'); ?>
+                                    <?php _e('Create your first invoice →', 'black-rock-billing'); ?>
                                 </a>
                             </p>
                         <?php endif; ?>
@@ -1599,7 +1653,7 @@ class BRB_Frontend {
                     <table class="brb-bills-table">
                         <thead>
                             <tr>
-                                <th><?php _e('Bill Number', 'black-rock-billing'); ?></th>
+                                <th><?php _e('Invoice Number', 'black-rock-billing'); ?></th>
                                 <th><?php _e('Customer', 'black-rock-billing'); ?></th>
                                 <th><?php _e('Date', 'black-rock-billing'); ?></th>
                                 <th><?php _e('Due Date', 'black-rock-billing'); ?></th>
@@ -1707,7 +1761,7 @@ class BRB_Frontend {
                             <line x1="12" y1="18" x2="12" y2="12"></line>
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
-                        <?php _e('Create Bill', 'black-rock-billing'); ?>
+                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1803,7 +1857,7 @@ class BRB_Frontend {
                                                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                     </svg>
                                                 </a>
-                                                <a href="<?php echo esc_url(home_url('/billing-dashboard/create?brb_customer=' . $customer->ID)); ?>" class="brb-action-btn brb-action-bill" title="<?php _e('Create Bill', 'black-rock-billing'); ?>">
+                                                <a href="<?php echo esc_url(home_url('/billing-dashboard/create?brb_customer=' . $customer->ID)); ?>" class="brb-action-btn brb-action-bill" title="<?php _e('Create Invoice', 'black-rock-billing'); ?>">
                                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                                         <polyline points="14 2 14 8 20 8"></polyline>
@@ -1881,7 +1935,7 @@ class BRB_Frontend {
                             <line x1="12" y1="18" x2="12" y2="12"></line>
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
-                        <?php _e('Create Bill', 'black-rock-billing'); ?>
+                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1973,7 +2027,7 @@ class BRB_Frontend {
                         <table class="brb-bills-table">
                             <thead>
                                 <tr>
-                                    <th><?php _e('Bill Number', 'black-rock-billing'); ?></th>
+                                    <th><?php _e('Invoice Number', 'black-rock-billing'); ?></th>
                                     <th><?php _e('Date', 'black-rock-billing'); ?></th>
                                     <th><?php _e('Due Date', 'black-rock-billing'); ?></th>
                                     <th><?php _e('Total', 'black-rock-billing'); ?></th>
@@ -2012,7 +2066,7 @@ class BRB_Frontend {
                                             </span>
                                         </td>
                                         <td style="text-align: center;">
-                                            <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill->ID)); ?>" class="brb-action-btn brb-action-view" title="<?php _e('View Bill', 'black-rock-billing'); ?>">
+                                            <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill->ID)); ?>" class="brb-action-btn brb-action-view" title="<?php _e('View Invoice', 'black-rock-billing'); ?>">
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                                     <circle cx="12" cy="12" r="3"></circle>
@@ -2066,7 +2120,7 @@ class BRB_Frontend {
                             <line x1="12" y1="18" x2="12" y2="12"></line>
                             <line x1="9" y1="15" x2="15" y2="15"></line>
                         </svg>
-                        <?php _e('Create Bill', 'black-rock-billing'); ?>
+                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link active">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2117,11 +2171,11 @@ class BRB_Frontend {
                         <h2><?php _e('Bill Settings', 'black-rock-billing'); ?></h2>
                         
                         <div class="brb-form-row">
-                            <label for="brb_bill_prefix"><?php _e('Bill Number Prefix', 'black-rock-billing'); ?></label>
+                            <label for="brb_bill_prefix"><?php _e('Invoice Number Prefix', 'black-rock-billing'); ?></label>
                             <input type="text" id="brb_bill_prefix" name="brb_bill_prefix" 
                                    value="<?php echo esc_attr(get_option('brb_bill_prefix', 'BILL')); ?>" 
                                    class="regular-text" />
-                            <p class="description"><?php _e('Prefix for auto-generated bill numbers (e.g., BILL-2026-0001)', 'black-rock-billing'); ?></p>
+                            <p class="description"><?php _e('Prefix for auto-generated invoice numbers (e.g., INV-2026-0001)', 'black-rock-billing'); ?></p>
                         </div>
                     </div>
                     
@@ -2530,6 +2584,616 @@ class BRB_Frontend {
             'message' => $customer_id ? __('Customer updated successfully.', 'black-rock-billing') : __('Customer created successfully.', 'black-rock-billing'),
             'redirect' => home_url('/billing-dashboard/customers/' . $user_id)
         ));
+    }
+    
+    /**
+     * Render import invoices page
+     */
+    public function render_import() {
+        get_header();
+        ?>
+        <div class="brb-create-bill-container">
+            <div class="brb-page-header">
+                <h1><?php _e('Import Invoices', 'black-rock-billing'); ?></h1>
+                <div class="brb-dashboard-nav">
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                        <?php _e('Dashboard', 'black-rock-billing'); ?>
+                    </a>
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard/bills')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        <?php _e('All Invoices', 'black-rock-billing'); ?>
+                    </a>
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard/import')); ?>" class="brb-nav-link active">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <?php _e('Import CSV', 'black-rock-billing'); ?>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="brb-bill-form">
+                <div class="brb-form-section">
+                    <h2><?php _e('Import Invoices from CSV', 'black-rock-billing'); ?></h2>
+                    <p class="description"><?php _e('Upload a CSV file to import invoices. The CSV should match the export format with the following columns: Invoice Number, Date, Due Date, Customer Name, Customer Email, Customer Phone, Status, Original Total, Return Total, Adjusted Total, Paid Amount, Pending Amount, Refund Due, Items Count, Return Items Count, Notes.', 'black-rock-billing'); ?></p>
+                    
+                    <form id="brb-import-csv-form" enctype="multipart/form-data">
+                        <?php wp_nonce_field('brb_import_csv', 'brb_import_nonce'); ?>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_csv_file"><?php _e('CSV File', 'black-rock-billing'); ?> <span class="required">*</span></label>
+                            <input type="file" id="brb_csv_file" name="csv_file" accept=".csv" required class="brb-form-input" />
+                            <p class="description"><?php _e('Select a CSV file to import. Maximum file size: 10MB', 'black-rock-billing'); ?></p>
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label>
+                                <input type="checkbox" id="brb_skip_duplicates" name="skip_duplicates" value="1" checked />
+                                <?php _e('Skip duplicate invoices (by invoice number)', 'black-rock-billing'); ?>
+                            </label>
+                        </div>
+                        
+                        <div class="brb-form-actions">
+                            <button type="submit" class="button button-primary"><?php _e('Import Invoices', 'black-rock-billing'); ?></button>
+                            <a href="<?php echo esc_url(home_url('/billing-dashboard/bills')); ?>" class="button"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                        </div>
+                    </form>
+                    
+                    <div id="brb-import-progress" style="display: none; margin-top: 20px;">
+                        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb;">
+                            <p style="margin: 0; font-weight: 600; color: #1e293b;"><?php _e('Importing...', 'black-rock-billing'); ?></p>
+                            <p id="brb-import-status" style="margin: 8px 0 0 0; color: #64748b; font-size: 0.9em;"></p>
+                        </div>
+                    </div>
+                    
+                    <div id="brb-import-results" style="display: none; margin-top: 20px;"></div>
+                </div>
+            </div>
+        </div>
+        <?php
+        get_footer();
+    }
+    
+    /**
+     * AJAX: Import invoices from CSV
+     */
+    public function ajax_import_invoices_csv() {
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => __('You do not have permission to import invoices.', 'black-rock-billing')));
+        }
+        
+        // Verify nonce
+        if (!isset($_POST['brb_import_nonce']) || !wp_verify_nonce($_POST['brb_import_nonce'], 'brb_import_csv')) {
+            wp_send_json_error(array('message' => __('Security check failed. Please refresh the page and try again.', 'black-rock-billing')));
+        }
+        
+        // Check if file was uploaded
+        if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+            wp_send_json_error(array('message' => __('Please select a valid CSV file.', 'black-rock-billing')));
+        }
+        
+        $file = $_FILES['csv_file'];
+        $skip_duplicates = isset($_POST['skip_duplicates']) && $_POST['skip_duplicates'] === '1';
+        
+        // Validate file type
+        $file_ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if ($file_ext !== 'csv') {
+            wp_send_json_error(array('message' => __('Invalid file type. Please upload a CSV file.', 'black-rock-billing')));
+        }
+        
+        // Validate file size (10MB max)
+        if ($file['size'] > 10 * 1024 * 1024) {
+            wp_send_json_error(array('message' => __('File size exceeds 10MB limit.', 'black-rock-billing')));
+        }
+        
+        // Read CSV file
+        $handle = fopen($file['tmp_name'], 'r');
+        if ($handle === false) {
+            wp_send_json_error(array('message' => __('Unable to read CSV file.', 'black-rock-billing')));
+        }
+        
+        // Skip UTF-8 BOM if present
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        }
+        
+        // Read header row
+        $headers = fgetcsv($handle);
+        if ($headers === false) {
+            fclose($handle);
+            wp_send_json_error(array('message' => __('CSV file is empty or invalid.', 'black-rock-billing')));
+        }
+        
+        // Expected headers (flexible matching)
+        $expected_headers = array(
+            'invoice_number' => array('invoice number', 'bill number'),
+            'date' => array('date', 'invoice date', 'bill date'),
+            'due_date' => array('due date'),
+            'customer_name' => array('customer name', 'name'),
+            'customer_email' => array('customer email', 'email'),
+            'customer_phone' => array('customer phone', 'phone'),
+            'status' => array('status'),
+            'original_total' => array('original total', 'total'),
+            'return_total' => array('return total'),
+            'adjusted_total' => array('adjusted total'),
+            'paid_amount' => array('paid amount', 'paid'),
+            'pending_amount' => array('pending amount', 'pending'),
+            'refund_due' => array('refund due'),
+            'items_count' => array('items count'),
+            'return_items_count' => array('return items count'),
+            'notes' => array('notes')
+        );
+        
+        // Map headers to indices
+        $header_map = array();
+        foreach ($expected_headers as $key => $variations) {
+            foreach ($headers as $index => $header) {
+                $header_lower = strtolower(trim($header));
+                foreach ($variations as $variation) {
+                    if ($header_lower === strtolower($variation)) {
+                        $header_map[$key] = $index;
+                        break 2;
+                    }
+                }
+            }
+        }
+        
+        // Check required fields
+        $required_fields = array('invoice_number', 'date', 'customer_email', 'original_total');
+        $missing_fields = array();
+        foreach ($required_fields as $field) {
+            if (!isset($header_map[$field])) {
+                $missing_fields[] = $expected_headers[$field][0];
+            }
+        }
+        
+        if (!empty($missing_fields)) {
+            fclose($handle);
+            wp_send_json_error(array('message' => sprintf(__('Missing required columns: %s', 'black-rock-billing'), implode(', ', $missing_fields))));
+        }
+        
+        // Import invoices
+        $imported = 0;
+        $skipped = 0;
+        $errors = array();
+        $row_num = 1; // Header is row 1
+        
+        while (($row = fgetcsv($handle)) !== false) {
+            $row_num++;
+            
+            // Skip empty rows
+            if (empty(array_filter($row))) {
+                continue;
+            }
+            
+            // Skip totals row
+            if (isset($row[$header_map['invoice_number']]) && strtoupper(trim($row[$header_map['invoice_number']])) === 'TOTAL') {
+                continue;
+            }
+            
+            try {
+                // Get values from CSV row
+                $invoice_number = isset($header_map['invoice_number']) ? trim($row[$header_map['invoice_number']]) : '';
+                $date = isset($header_map['date']) ? trim($row[$header_map['date']]) : '';
+                $due_date = isset($header_map['due_date']) ? trim($row[$header_map['due_date']]) : '';
+                $customer_name = isset($header_map['customer_name']) ? trim($row[$header_map['customer_name']]) : '';
+                $customer_email = isset($header_map['customer_email']) ? trim($row[$header_map['customer_email']]) : '';
+                $customer_phone = isset($header_map['customer_phone']) ? trim($row[$header_map['customer_phone']]) : '';
+                $status = isset($header_map['status']) ? strtolower(trim($row[$header_map['status']])) : 'draft';
+                $original_total = isset($header_map['original_total']) ? floatval($row[$header_map['original_total']]) : 0;
+                $return_total = isset($header_map['return_total']) ? abs(floatval($row[$header_map['return_total']])) : 0;
+                $adjusted_total = isset($header_map['adjusted_total']) ? floatval($row[$header_map['adjusted_total']]) : $original_total;
+                $paid_amount = isset($header_map['paid_amount']) ? floatval($row[$header_map['paid_amount']]) : 0;
+                $pending_amount = isset($header_map['pending_amount']) ? floatval($row[$header_map['pending_amount']]) : 0;
+                $refund_due = isset($header_map['refund_due']) ? floatval($row[$header_map['refund_due']]) : 0;
+                $items_count = isset($header_map['items_count']) ? intval($row[$header_map['items_count']]) : 0;
+                $return_items_count = isset($header_map['return_items_count']) ? intval($row[$header_map['return_items_count']]) : 0;
+                $notes = isset($header_map['notes']) ? trim($row[$header_map['notes']]) : '';
+                
+                // Validate required fields
+                if (empty($invoice_number) || empty($customer_email) || empty($date)) {
+                    $errors[] = sprintf(__('Row %d: Missing required fields', 'black-rock-billing'), $row_num);
+                    continue;
+                }
+                
+                // Check for duplicate invoice number
+                if ($skip_duplicates) {
+                    $existing = get_posts(array(
+                        'post_type' => 'brb_bill',
+                        'posts_per_page' => 1,
+                        'post_status' => 'any',
+                        'meta_query' => array(
+                            array(
+                                'key' => '_brb_bill_number',
+                                'value' => $invoice_number,
+                                'compare' => '='
+                            )
+                        )
+                    ));
+                    
+                    if (!empty($existing)) {
+                        $skipped++;
+                        continue;
+                    }
+                }
+                
+                // Find or create customer
+                $customer = get_user_by('email', $customer_email);
+                if (!$customer) {
+                    // Create new customer
+                    $username = sanitize_user($customer_email);
+                    $counter = 1;
+                    while (username_exists($username)) {
+                        $username = sanitize_user($customer_email) . $counter;
+                        $counter++;
+                    }
+                    
+                    $name_parts = explode(' ', $customer_name, 2);
+                    $first_name = isset($name_parts[0]) ? $name_parts[0] : '';
+                    $last_name = isset($name_parts[1]) ? $name_parts[1] : '';
+                    
+                    $user_data = array(
+                        'user_login' => $username,
+                        'user_email' => $customer_email,
+                        'user_pass' => wp_generate_password(12, false),
+                        'display_name' => $customer_name,
+                        'role' => 'subscriber'
+                    );
+                    
+                    $customer_id = wp_insert_user($user_data);
+                    
+                    if (is_wp_error($customer_id)) {
+                        $errors[] = sprintf(__('Row %d: Failed to create customer: %s', 'black-rock-billing'), $row_num, $customer_id->get_error_message());
+                        continue;
+                    }
+                    
+                    if ($first_name) {
+                        update_user_meta($customer_id, 'first_name', $first_name);
+                    }
+                    if ($last_name) {
+                        update_user_meta($customer_id, 'last_name', $last_name);
+                    }
+                    if ($customer_phone) {
+                        update_user_meta($customer_id, 'billing_phone', $customer_phone);
+                    }
+                } else {
+                    $customer_id = $customer->ID;
+                }
+                
+                // Parse date
+                $bill_date = '';
+                if ($date) {
+                    $parsed_date = strtotime($date);
+                    if ($parsed_date !== false) {
+                        $bill_date = date('Y-m-d', $parsed_date);
+                    } else {
+                        // Try different date formats
+                        $formats = array('Y-m-d', 'm/d/Y', 'd/m/Y', 'Y/m/d');
+                        foreach ($formats as $format) {
+                            $parsed = date_create_from_format($format, $date);
+                            if ($parsed !== false) {
+                                $bill_date = $parsed->format('Y-m-d');
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (empty($bill_date)) {
+                    $bill_date = date('Y-m-d');
+                }
+                
+                // Parse due date
+                $parsed_due_date = '';
+                if ($due_date) {
+                    $parsed = strtotime($due_date);
+                    if ($parsed !== false) {
+                        $parsed_due_date = date('Y-m-d', $parsed);
+                    } else {
+                        $formats = array('Y-m-d', 'm/d/Y', 'd/m/Y', 'Y/m/d');
+                        foreach ($formats as $format) {
+                            $parsed = date_create_from_format($format, $due_date);
+                            if ($parsed !== false) {
+                                $parsed_due_date = $parsed->format('Y-m-d');
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Validate status
+                $valid_statuses = array('draft', 'sent', 'paid', 'overdue', 'cancelled');
+                if (!in_array($status, $valid_statuses)) {
+                    $status = 'draft';
+                }
+                
+                // Create invoice post
+                $post_data = array(
+                    'post_type' => 'brb_bill',
+                    'post_status' => 'publish',
+                    'post_title' => sprintf(__('Invoice %s', 'black-rock-billing'), $invoice_number),
+                    'post_content' => $notes
+                );
+                
+                $post_id = wp_insert_post($post_data);
+                
+                if (is_wp_error($post_id)) {
+                    $errors[] = sprintf(__('Row %d: Failed to create invoice: %s', 'black-rock-billing'), $row_num, $post_id->get_error_message());
+                    continue;
+                }
+                
+                // Save invoice meta
+                update_post_meta($post_id, '_brb_bill_number', $invoice_number);
+                update_post_meta($post_id, '_brb_bill_date', $bill_date);
+                if ($parsed_due_date) {
+                    update_post_meta($post_id, '_brb_due_date', $parsed_due_date);
+                }
+                update_post_meta($post_id, '_brb_customer_id', $customer_id);
+                update_post_meta($post_id, '_brb_status', $status);
+                update_post_meta($post_id, '_brb_total_amount', $original_total);
+                update_post_meta($post_id, '_brb_paid_amount', $paid_amount);
+                
+                // Create placeholder items if items_count > 0
+                if ($items_count > 0) {
+                    $items = array();
+                    for ($i = 0; $i < $items_count; $i++) {
+                        $items[] = array(
+                            'description' => sprintf(__('Imported Item %d', 'black-rock-billing'), $i + 1),
+                            'quantity' => 1,
+                            'rate' => $original_total / max($items_count, 1)
+                        );
+                    }
+                    update_post_meta($post_id, '_brb_bill_items', $items);
+                }
+                
+                // Create placeholder return items if return_items_count > 0
+                if ($return_items_count > 0 && $return_total > 0) {
+                    $return_items = array();
+                    for ($i = 0; $i < $return_items_count; $i++) {
+                        $return_items[] = array(
+                            'description' => sprintf(__('Imported Return Item %d', 'black-rock-billing'), $i + 1),
+                            'quantity' => 1,
+                            'rate' => $return_total / max($return_items_count, 1)
+                        );
+                    }
+                    update_post_meta($post_id, '_brb_return_items', $return_items);
+                }
+                
+                // Calculate and save refund due
+                $calculated_refund = 0;
+                if ($paid_amount > $adjusted_total) {
+                    $calculated_refund = $paid_amount - $adjusted_total;
+                }
+                update_post_meta($post_id, '_brb_refund_due', $calculated_refund);
+                
+                $imported++;
+                
+            } catch (Exception $e) {
+                $errors[] = sprintf(__('Row %d: %s', 'black-rock-billing'), $row_num, $e->getMessage());
+            }
+        }
+        
+        fclose($handle);
+        
+        // Build response message
+        $message = sprintf(
+            __('Import completed: %d imported, %d skipped', 'black-rock-billing'),
+            $imported,
+            $skipped
+        );
+        
+        if (!empty($errors)) {
+            $message .= '. ' . sprintf(__('%d errors occurred.', 'black-rock-billing'), count($errors));
+        }
+        
+        wp_send_json_success(array(
+            'message' => $message,
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'redirect' => home_url('/billing-dashboard/bills')
+        ));
+    }
+    
+    /**
+     * Export invoices to CSV
+     */
+    private function export_invoices_csv() {
+        // Check permissions
+        if (!is_user_logged_in()) {
+            wp_die(__('You must be logged in to export invoices.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+        }
+        
+        // Get all invoices user can view
+        if (current_user_can('manage_options')) {
+            $args = array(
+                'post_type' => 'brb_bill',
+                'posts_per_page' => -1,
+                'post_status' => 'publish',
+                'orderby' => 'date',
+                'order' => 'DESC'
+            );
+        } else {
+            $args = array(
+                'post_type' => 'brb_bill',
+                'posts_per_page' => -1,
+                'post_status' => 'publish',
+                'orderby' => 'date',
+                'order' => 'DESC',
+                'meta_query' => array(
+                    array(
+                        'key' => '_brb_customer_id',
+                        'value' => get_current_user_id(),
+                        'compare' => '='
+                    )
+                )
+            );
+        }
+        
+        $bills = get_posts($args);
+        
+        // Set headers for CSV download
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=invoices-' . date('Y-m-d') . '.csv');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        // Output UTF-8 BOM for Excel compatibility
+        echo "\xEF\xBB\xBF";
+        
+        // Open output stream
+        $output = fopen('php://output', 'w');
+        
+        // CSV Headers
+        $headers = array(
+            __('Invoice Number', 'black-rock-billing'),
+            __('Date', 'black-rock-billing'),
+            __('Due Date', 'black-rock-billing'),
+            __('Customer Name', 'black-rock-billing'),
+            __('Customer Email', 'black-rock-billing'),
+            __('Customer Phone', 'black-rock-billing'),
+            __('Status', 'black-rock-billing'),
+            __('Original Total', 'black-rock-billing'),
+            __('Return Total', 'black-rock-billing'),
+            __('Adjusted Total', 'black-rock-billing'),
+            __('Paid Amount', 'black-rock-billing'),
+            __('Pending Amount', 'black-rock-billing'),
+            __('Refund Due', 'black-rock-billing'),
+            __('Items Count', 'black-rock-billing'),
+            __('Return Items Count', 'black-rock-billing'),
+            __('Notes', 'black-rock-billing')
+        );
+        
+        fputcsv($output, $headers);
+        
+        // Initialize totals
+        $totals = array(
+            'original_total' => 0,
+            'return_total' => 0,
+            'adjusted_total' => 0,
+            'paid_amount' => 0,
+            'pending_amount' => 0,
+            'refund_due' => 0,
+            'items_count' => 0,
+            'return_items_count' => 0
+        );
+        
+        // Export each invoice
+        foreach ($bills as $bill) {
+            $bill_id = $bill->ID;
+            $bill_number = get_post_meta($bill_id, '_brb_bill_number', true);
+            $bill_date = get_post_meta($bill_id, '_brb_bill_date', true);
+            $due_date = get_post_meta($bill_id, '_brb_due_date', true);
+            $customer_id = get_post_meta($bill_id, '_brb_customer_id', true);
+            $status = brb_get_bill_status($bill_id);
+            $total = brb_get_bill_total($bill_id);
+            $return_total = brb_get_return_total($bill_id);
+            $adjusted_total = brb_get_adjusted_bill_total($bill_id);
+            $paid = brb_get_paid_amount($bill_id);
+            $pending = brb_get_pending_amount($bill_id);
+            $refund_due = brb_get_refund_due($bill_id);
+            $items = brb_get_bill_items($bill_id);
+            $return_items = brb_get_return_items($bill_id);
+            $notes = $bill->post_content;
+            
+            $customer = get_userdata($customer_id);
+            $customer_name = $customer ? $customer->display_name : '';
+            $customer_email = $customer ? $customer->user_email : '';
+            $customer_phone = $customer_id ? brb_get_customer_phone($customer_id) : '';
+            
+            // Format dates
+            $formatted_date = $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '';
+            $formatted_due_date = $due_date ? date_i18n(get_option('date_format'), strtotime($due_date)) : '';
+            
+            // Format currency values (remove currency symbol for CSV)
+            $currency_symbol = get_option('brb_currency_symbol', 'AED');
+            $total_clean = str_replace($currency_symbol . ' ', '', brb_format_currency($total));
+            $return_total_clean = str_replace($currency_symbol . ' ', '', brb_format_currency($return_total));
+            $adjusted_total_clean = str_replace($currency_symbol . ' ', '', brb_format_currency($adjusted_total));
+            $paid_clean = str_replace($currency_symbol . ' ', '', brb_format_currency($paid));
+            $pending_clean = str_replace($currency_symbol . ' ', '', brb_format_currency($pending));
+            $refund_due_clean = str_replace($currency_symbol . ' ', '', brb_format_currency($refund_due));
+            
+            // Accumulate totals
+            $totals['original_total'] += floatval($total);
+            $totals['return_total'] += floatval($return_total);
+            $totals['adjusted_total'] += floatval($adjusted_total);
+            $totals['paid_amount'] += floatval($paid);
+            $totals['pending_amount'] += floatval($pending);
+            $totals['refund_due'] += floatval($refund_due);
+            $totals['items_count'] += count($items);
+            $totals['return_items_count'] += count($return_items);
+            
+            $row = array(
+                $bill_number ?: 'N/A',
+                $formatted_date,
+                $formatted_due_date,
+                $customer_name,
+                $customer_email,
+                $customer_phone,
+                ucfirst($status),
+                $total_clean,
+                $return_total > 0 ? '-' . $return_total_clean : '0',
+                $adjusted_total_clean,
+                $paid_clean,
+                $pending_clean,
+                $refund_due > 0 ? $refund_due_clean : '0',
+                count($items),
+                count($return_items),
+                strip_tags($notes)
+            );
+            
+            fputcsv($output, $row);
+        }
+        
+        // Add totals row
+        if (count($bills) > 0) {
+            // Format totals
+            $currency_symbol = get_option('brb_currency_symbol', 'AED');
+            $total_original = number_format($totals['original_total'], 2, '.', '');
+            $total_return = number_format($totals['return_total'], 2, '.', '');
+            $total_adjusted = number_format($totals['adjusted_total'], 2, '.', '');
+            $total_paid = number_format($totals['paid_amount'], 2, '.', '');
+            $total_pending = number_format($totals['pending_amount'], 2, '.', '');
+            $total_refund = number_format($totals['refund_due'], 2, '.', '');
+            
+            $totals_row = array(
+                __('TOTAL', 'black-rock-billing'),
+                '', // Date
+                '', // Due Date
+                '', // Customer Name
+                '', // Customer Email
+                '', // Customer Phone
+                '', // Status
+                $total_original,
+                $totals['return_total'] > 0 ? '-' . $total_return : '0',
+                $total_adjusted,
+                $total_paid,
+                $total_pending,
+                $totals['refund_due'] > 0 ? $total_refund : '0',
+                $totals['items_count'],
+                $totals['return_items_count'],
+                '' // Notes
+            );
+            
+            fputcsv($output, $totals_row);
+        }
+        
+        fclose($output);
+        exit;
     }
 }
 

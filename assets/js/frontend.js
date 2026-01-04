@@ -627,6 +627,83 @@
                 }
             });
         });
+        
+        // CSV Import
+        $('#brb-import-csv-form').on('submit', function(e) {
+            e.preventDefault();
+            
+            const $form = $(this);
+            const $button = $form.find('button[type="submit"]');
+            const $progress = $('#brb-import-progress');
+            const $results = $('#brb-import-results');
+            const originalText = $button.html();
+            
+            // Validate file
+            const fileInput = $('#brb_csv_file')[0];
+            if (!fileInput.files || !fileInput.files[0]) {
+                alert('Please select a CSV file.');
+                return;
+            }
+            
+            $button.prop('disabled', true).html('Importing...');
+            $progress.show();
+            $results.hide();
+            $('#brb-import-status').text('Processing CSV file...');
+            
+            const formData = new FormData(this);
+            formData.append('action', 'brb_import_invoices_csv');
+            
+            $.ajax({
+                url: (typeof brbData !== 'undefined' && brbData.ajaxUrl) ? brbData.ajaxUrl : '/wp-admin/admin-ajax.php',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        $('#brb-import-status').text('Import completed successfully!');
+                        
+                        let resultsHtml = '<div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; margin-top: 15px;">';
+                        resultsHtml += '<h3 style="margin: 0 0 10px 0; color: #065f46;">' + response.data.message + '</h3>';
+                        resultsHtml += '<p style="margin: 5px 0; color: #047857;"><strong>Imported:</strong> ' + response.data.imported + '</p>';
+                        if (response.data.skipped > 0) {
+                            resultsHtml += '<p style="margin: 5px 0; color: #047857;"><strong>Skipped:</strong> ' + response.data.skipped + '</p>';
+                        }
+                        
+                        if (response.data.errors && response.data.errors.length > 0) {
+                            resultsHtml += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #d1fae5;">';
+                            resultsHtml += '<p style="margin: 0 0 10px 0; color: #dc2626; font-weight: 600;">Errors:</p>';
+                            resultsHtml += '<ul style="margin: 0; padding-left: 20px; color: #991b1b;">';
+                            response.data.errors.forEach(function(error) {
+                                resultsHtml += '<li>' + error + '</li>';
+                            });
+                            resultsHtml += '</ul></div>';
+                        }
+                        resultsHtml += '</div>';
+                        
+                        $results.html(resultsHtml).show();
+                        
+                        // Redirect after 3 seconds if successful
+                        if (response.data.redirect && response.data.errors.length === 0) {
+                            setTimeout(function() {
+                                window.location.href = response.data.redirect;
+                            }, 3000);
+                        } else {
+                            $button.prop('disabled', false).html(originalText);
+                        }
+                    } else {
+                        $('#brb-import-status').text('Import failed.');
+                        alert(response.data.message || 'An error occurred during import.');
+                        $button.prop('disabled', false).html(originalText);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#brb-import-status').text('Import failed.');
+                    alert('An error occurred during import. Please try again.');
+                    $button.prop('disabled', false).html(originalText);
+                }
+            });
+        });
     });
     
 })(jQuery);
