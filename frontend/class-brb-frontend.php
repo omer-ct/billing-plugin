@@ -235,19 +235,47 @@ class BRB_Frontend {
                 
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link active">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <?php if (current_user_can('manage_options')): ?>
                         <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
                             <?php _e('Customers', 'black-rock-billing'); ?>
                         </a>
                         <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="8.5" cy="7" r="4"></circle>
+                                <line x1="20" y1="8" x2="20" y2="14"></line>
+                                <line x1="23" y1="11" x2="17" y2="11"></line>
+                            </svg>
                             <?php _e('Add Customer', 'black-rock-billing'); ?>
                         </a>
                         <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="18" x2="12" y2="12"></line>
+                                <line x1="9" y1="15" x2="15" y2="15"></line>
+                            </svg>
                             <?php _e('Create Bill', 'black-rock-billing'); ?>
                         </a>
                         <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                            </svg>
                             <?php _e('Settings', 'black-rock-billing'); ?>
                         </a>
                     <?php endif; ?>
@@ -256,14 +284,35 @@ class BRB_Frontend {
             
             <div class="brb-summary-cards">
                 <div class="brb-summary-card">
+                    <div class="brb-summary-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
                     <h3><?php _e('Total Billed', 'black-rock-billing'); ?></h3>
                     <p class="brb-amount"><?php echo brb_format_currency($total_billed); ?></p>
                 </div>
                 <div class="brb-summary-card">
+                    <div class="brb-summary-card-icon brb-icon-paid">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                    </div>
                     <h3><?php _e('Total Paid', 'black-rock-billing'); ?></h3>
                     <p class="brb-amount brb-paid"><?php echo brb_format_currency($total_paid); ?></p>
                 </div>
                 <div class="brb-summary-card" style="border-top-color: <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
+                    <div class="brb-summary-card-icon brb-icon-pending">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                    </div>
                     <h3><?php _e('Pending', 'black-rock-billing'); ?></h3>
                     <p class="brb-amount" style="color: <?php echo $net_pending >= 0 ? '#00a32a' : '#dc2626'; ?>;">
                         <?php echo $net_pending >= 0 ? '' : '-'; ?><?php echo brb_format_currency(abs($net_pending)); ?>
@@ -654,18 +703,46 @@ class BRB_Frontend {
                 <h1><?php _e('Create New Bill', 'black-rock-billing'); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                         <?php _e('Customers', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
                         <?php _e('Add Customer', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link active">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
                         <?php _e('Create Bill', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
                         <?php _e('Settings', 'black-rock-billing'); ?>
                     </a>
                 </div>
@@ -836,18 +913,46 @@ class BRB_Frontend {
                 <h1><?php _e('Edit Bill', 'black-rock-billing'); ?> - <?php echo esc_html($bill_number ?: '#' . $bill_id); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill_id)); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
                         <?php _e('View Bill', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                         <?php _e('Customers', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
                         <?php _e('Add Customer', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
                         <?php _e('Create Bill', 'black-rock-billing'); ?>
                     </a>
                 </div>
@@ -1420,18 +1525,46 @@ class BRB_Frontend {
                 <h1><?php _e('All Bills', 'black-rock-billing'); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                         <?php _e('Customers', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
                         <?php _e('Add Customer', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
                         <?php _e('Create Bill', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
                         <?php _e('Settings', 'black-rock-billing'); ?>
                     </a>
                 </div>
@@ -1446,7 +1579,22 @@ class BRB_Frontend {
                 </div>
                 
                 <?php if (empty($bills)): ?>
-                    <p class="brb-no-bills"><?php _e('No bills found.', 'black-rock-billing'); ?></p>
+                    <div class="brb-no-bills">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        <p><?php _e('No bills found.', 'black-rock-billing'); ?></p>
+                        <?php if (current_user_can('manage_options')): ?>
+                            <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">
+                                <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" style="color: #3b82f6; text-decoration: none; font-weight: 600;">
+                                    <?php _e('Create your first bill →', 'black-rock-billing'); ?>
+                                </a>
+                            </p>
+                        <?php endif; ?>
+                    </div>
                 <?php else: ?>
                     <table class="brb-bills-table">
                         <thead>
@@ -1535,15 +1683,37 @@ class BRB_Frontend {
                 <h1><?php _e('Customers', 'black-rock-billing'); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link active">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                         <?php _e('Customers', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
                         <?php _e('Create Bill', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
                         <?php _e('Settings', 'black-rock-billing'); ?>
                     </a>
                 </div>
@@ -1678,18 +1848,46 @@ class BRB_Frontend {
                 <h1><?php printf(__('Customer: %s', 'black-rock-billing'), esc_html(brb_format_customer_name($customer->display_name))); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                         <?php _e('Customers', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
                         <?php _e('Add Customer', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
                         <?php _e('Create Bill', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
                         <?php _e('Settings', 'black-rock-billing'); ?>
                     </a>
                 </div>
@@ -1844,15 +2042,37 @@ class BRB_Frontend {
                 <h1><?php _e('Settings', 'black-rock-billing'); ?></h1>
                 <div class="brb-dashboard-nav">
                     <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                        </svg>
                         <?php _e('Dashboard', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
                         <?php _e('Customers', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
                         <?php _e('Create Bill', 'black-rock-billing'); ?>
                     </a>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link active">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
                         <?php _e('Settings', 'black-rock-billing'); ?>
                     </a>
                 </div>
@@ -2152,7 +2372,7 @@ class BRB_Frontend {
                 </div>
                 
                 <div class="brb-form-actions">
-                    <button type="submit" class="button"><?php _e('Create Customer', 'black-rock-billing'); ?></button>
+                    <button type="submit" class="button button-primary"><?php _e('Create Customer', 'black-rock-billing'); ?></button>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="button"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                 </div>
             </form>
@@ -2225,7 +2445,7 @@ class BRB_Frontend {
                 </div>
                 
                 <div class="brb-form-actions">
-                    <button type="submit" class="button"><?php _e('Update Customer', 'black-rock-billing'); ?></button>
+                    <button type="submit" class="button button-primary"><?php _e('Update Customer', 'black-rock-billing'); ?></button>
                     <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/' . $customer_id)); ?>" class="button"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                 </div>
             </form>
