@@ -27,14 +27,18 @@ class BRB_PDF {
         $customer_id = get_post_meta($bill_id, '_brb_customer_id', true);
         $items = brb_get_bill_items($bill_id);
         $total = brb_get_bill_total($bill_id);
+        $return_items = brb_get_return_items($bill_id);
+        $return_total = brb_get_return_total($bill_id);
+        $adjusted_total = brb_get_adjusted_bill_total($bill_id);
         $paid = brb_get_paid_amount($bill_id);
         $pending = brb_get_pending_amount($bill_id);
+        $refund_due = brb_get_refund_due($bill_id);
         $status = brb_get_bill_status($bill_id);
         
         $customer = get_userdata($customer_id);
         
         // Generate HTML content
-        $html = self::get_pdf_html($bill, $bill_number, $bill_date, $due_date, $customer, $items, $total, $paid, $pending, $status);
+        $html = self::get_pdf_html($bill, $bill_number, $bill_date, $due_date, $customer, $items, $total, $return_items, $return_total, $adjusted_total, $paid, $pending, $refund_due, $status);
         
         // Use DomPDF if available, otherwise use print-friendly HTML
         if (class_exists('Dompdf\Dompdf')) {
@@ -49,7 +53,7 @@ class BRB_PDF {
     /**
      * Get PDF HTML content
      */
-    private static function get_pdf_html($bill, $bill_number, $bill_date, $due_date, $customer, $items, $total, $paid, $pending, $status) {
+    private static function get_pdf_html($bill, $bill_number, $bill_date, $due_date, $customer, $items, $total, $return_items, $return_total, $adjusted_total, $paid, $pending, $refund_due, $status) {
         ob_start();
         ?>
         <!DOCTYPE html>
@@ -57,61 +61,103 @@ class BRB_PDF {
         <head>
             <meta charset="UTF-8">
             <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    font-size: 12px;
+                @page {
                     margin: 0;
-                    padding: 20px;
-                    color: #333;
+                }
+                * {
+                    margin: 0;
+                    padding: 0;
+                }
+                body {
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 12px;
+                    line-height: 1.5;
+                    margin: 0;
+                    padding: 30px;
+                    color: #000000;
+                }
+                @media print {
+                    @page {
+                        margin: 0;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 30px;
+                    }
+                }
+                a {
+                    color: inherit;
+                    text-decoration: none;
+                    pointer-events: none;
                 }
                 .header {
-                    margin-bottom: 30px;
-                    border-bottom: 2px solid #333;
-                    padding-bottom: 20px;
+                    margin-bottom: 25px;
+                    padding-bottom: 10px;
+                    border-bottom: 1px solid #000000;
                 }
                 .company-info {
                     float: left;
                     width: 50%;
+                }
+                .company-info h1 {
+                    font-size: 18px;
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }
+                .company-info p {
+                    font-size: 11px;
+                    color: #666666;
                 }
                 .bill-info {
                     float: right;
                     width: 45%;
                     text-align: right;
                 }
+                .bill-info h2 {
+                    font-size: 20px;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }
+                .bill-info p {
+                    margin: 3px 0;
+                    font-size: 11px;
+                }
                 .clear {
                     clear: both;
                 }
                 .bill-details {
-                    margin: 30px 0;
+                    margin: 20px 0;
                 }
                 .bill-to {
-                    background-color: #f5f5f5;
-                    padding: 15px;
                     margin-bottom: 20px;
                 }
                 .bill-to h3 {
-                    margin-top: 0;
-                    font-size: 14px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    margin-bottom: 8px;
+                }
+                .bill-to p {
+                    margin: 3px 0;
+                    font-size: 11px;
                 }
                 table {
                     width: 100%;
                     border-collapse: collapse;
-                    margin: 20px 0;
+                    margin: 15px 0;
                 }
-                table th {
-                    background-color: #333;
-                    color: #fff;
-                    padding: 10px;
+                table thead th {
+                    background-color: #000000;
+                    color: #ffffff;
+                    padding: 8px;
                     text-align: left;
                     font-weight: bold;
+                    font-size: 11px;
+                    border: 1px solid #000000;
                 }
-                table td {
-                    padding: 10px;
-                    border-bottom: 1px solid #ddd;
-                }
-                .total-row {
-                    font-weight: bold;
-                    background-color: #f9f9f9;
+                table tbody td {
+                    padding: 8px;
+                    border: 1px solid #cccccc;
+                    font-size: 11px;
                 }
                 .total-section {
                     margin-top: 20px;
@@ -120,62 +166,83 @@ class BRB_PDF {
                 .total-section table {
                     width: 300px;
                     margin-left: auto;
+                    border: 1px solid #cccccc;
+                }
+                .total-section table td {
+                    padding: 8px;
+                    border: 1px solid #cccccc;
+                    font-size: 11px;
+                }
+                .total-row {
+                    font-weight: bold;
+                    background-color: #f0f0f0;
                 }
                 .footer {
-                    margin-top: 40px;
-                    padding-top: 20px;
-                    border-top: 1px solid #ddd;
+                    margin-top: 30px;
+                    padding-top: 15px;
+                    border-top: 1px solid #cccccc;
                     font-size: 10px;
-                    color: #666;
+                    color: #666666;
+                    text-align: center;
                 }
                 .status {
                     display: inline-block;
-                    padding: 5px 10px;
-                    border-radius: 3px;
+                    padding: 2px 6px;
                     font-weight: bold;
-                    text-transform: uppercase;
+                    font-size: 10px;
                 }
-                .status-paid {
-                    background-color: #00a32a;
-                    color: #fff;
+                .return-section {
+                    margin-top: 20px;
                 }
-                .status-pending {
-                    background-color: #d63638;
-                    color: #fff;
+                .return-section h3 {
+                    font-size: 12px;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                    color: #dc2626;
                 }
-                .status-draft {
-                    background-color: #f0f0f1;
-                    color: #50575e;
+                .return-table thead th {
+                    background-color: #000000;
+                    color: #ffffff;
+                }
+                .notes-section {
+                    margin-top: 20px;
+                }
+                .notes-section h3 {
+                    font-size: 12px;
+                    font-weight: bold;
+                    margin-bottom: 8px;
+                }
+                .notes-section p {
+                    font-size: 11px;
+                    line-height: 1.5;
                 }
             </style>
         </head>
         <body>
             <div class="header">
                 <div class="company-info">
-                    <h1 style="margin: 0; font-size: 24px;"><?php echo esc_html(get_bloginfo('name')); ?></h1>
-                    <p style="margin: 5px 0; color: #666;"><?php echo esc_html(get_bloginfo('description')); ?></p>
+                    <h1><?php echo esc_html(get_bloginfo('name')); ?></h1>
+                    <?php if (get_bloginfo('description')): ?>
+                        <p><?php echo esc_html(get_bloginfo('description')); ?></p>
+                    <?php endif; ?>
                 </div>
                 <div class="bill-info">
-                    <h2 style="margin: 0; font-size: 20px;"><?php _e('BILL', 'black-rock-billing'); ?></h2>
-                    <p style="margin: 5px 0;"><strong><?php _e('Bill Number:', 'black-rock-billing'); ?></strong> <?php echo esc_html($bill_number ?: 'N/A'); ?></p>
-                    <p style="margin: 5px 0;"><strong><?php _e('Date:', 'black-rock-billing'); ?></strong> <?php echo $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '—'; ?></p>
+                    <p><strong><?php _e('Invoice Number:', 'black-rock-billing'); ?></strong> <?php echo esc_html($bill_number ?: 'N/A'); ?></p>
+                    <p><strong><?php _e('Date:', 'black-rock-billing'); ?></strong> <?php echo $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '—'; ?></p>
                     <?php if ($due_date): ?>
-                        <p style="margin: 5px 0;"><strong><?php _e('Due Date:', 'black-rock-billing'); ?></strong> <?php echo date_i18n(get_option('date_format'), strtotime($due_date)); ?></p>
+                        <p><strong><?php _e('Due Date:', 'black-rock-billing'); ?></strong> <?php echo date_i18n(get_option('date_format'), strtotime($due_date)); ?></p>
                     <?php endif; ?>
-                    <p style="margin: 5px 0;">
-                        <strong><?php _e('Status:', 'black-rock-billing'); ?></strong>
-                        <span class="status status-<?php echo esc_attr($status); ?>"><?php echo esc_html(ucfirst($status)); ?></span>
-                    </p>
+                    <p><strong><?php _e('Status:', 'black-rock-billing'); ?></strong> <?php echo esc_html(ucfirst($status)); ?></p>
                 </div>
                 <div class="clear"></div>
             </div>
             
             <div class="bill-details">
                 <div class="bill-to">
-                    <h3><?php _e('Bill To:', 'black-rock-billing'); ?></h3>
+                    <h3><?php _e('Invoice To:', 'black-rock-billing'); ?></h3>
                     <?php if ($customer): ?>
-                        <p style="margin: 5px 0;"><strong><?php echo esc_html($customer->display_name); ?></strong></p>
-                        <p style="margin: 5px 0;"><?php echo esc_html($customer->user_email); ?></p>
+                        <p><strong><?php echo esc_html($customer->display_name); ?></strong></p>
+                        <p><?php echo esc_html($customer->user_email); ?></p>
                     <?php endif; ?>
                 </div>
                 
@@ -206,35 +273,79 @@ class BRB_PDF {
                     </tbody>
                 </table>
                 
+                <?php if (!empty($return_items)): ?>
+                <div class="return-section">
+                    <h3><?php _e('Return Items', 'black-rock-billing'); ?></h3>
+                    <table class="return-table">
+                        <thead>
+                            <tr>
+                                <th><?php _e('Description', 'black-rock-billing'); ?></th>
+                                <th style="text-align: center;"><?php _e('Quantity', 'black-rock-billing'); ?></th>
+                                <th style="text-align: right;"><?php _e('Rate', 'black-rock-billing'); ?></th>
+                                <th style="text-align: right;"><?php _e('Total', 'black-rock-billing'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($return_items as $item): ?>
+                                <tr>
+                                    <td><?php echo esc_html($item['description']); ?></td>
+                                    <td style="text-align: center;"><?php echo esc_html($item['quantity']); ?></td>
+                                    <td style="text-align: right;"><?php echo brb_format_currency($item['rate']); ?></td>
+                                    <td style="text-align: right;">-<?php echo brb_format_currency(floatval($item['quantity']) * floatval($item['rate'])); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td colspan="3" style="color: #dc2626;"><strong><?php _e('Total Returns:', 'black-rock-billing'); ?></strong></td>
+                                <td style="text-align: right; color: #dc2626;"><strong>-<?php echo brb_format_currency($return_total); ?></strong></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <?php endif; ?>
+                
                 <div class="total-section">
                     <table>
                         <tr>
                             <td><strong><?php _e('Subtotal:', 'black-rock-billing'); ?></strong></td>
                             <td style="text-align: right;"><?php echo brb_format_currency($total); ?></td>
                         </tr>
+                        <?php if (!empty($return_items) && $return_total > 0): ?>
+                        <tr>
+                            <td style="color: #dc2626;"><?php _e('Return Total:', 'black-rock-billing'); ?></td>
+                            <td style="text-align: right; color: #dc2626;">-<?php echo brb_format_currency($return_total); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong><?php _e('Adjusted Total:', 'black-rock-billing'); ?></strong></td>
+                            <td style="text-align: right;"><strong><?php echo brb_format_currency($adjusted_total); ?></strong></td>
+                        </tr>
+                        <?php endif; ?>
                         <tr>
                             <td><?php _e('Paid Amount:', 'black-rock-billing'); ?></td>
                             <td style="text-align: right;"><?php echo brb_format_currency($paid); ?></td>
                         </tr>
                         <tr class="total-row">
-                            <td><strong><?php _e('Balance Due:', 'black-rock-billing'); ?></strong></td>
-                            <td style="text-align: right; color: <?php echo $pending > 0 ? '#d63638' : '#00a32a'; ?>;">
-                                <strong><?php echo brb_format_currency($pending); ?></strong>
-                            </td>
+                            <?php if ($refund_due > 0): ?>
+                                <td><strong><?php _e('Refund Due to Customer:', 'black-rock-billing'); ?></strong></td>
+                                <td style="text-align: right;"><strong><?php echo brb_format_currency($refund_due); ?></strong></td>
+                            <?php else: ?>
+                                <td><strong><?php _e('Balance Due:', 'black-rock-billing'); ?></strong></td>
+                                <td style="text-align: right;"><strong><?php echo brb_format_currency($pending); ?></strong></td>
+                            <?php endif; ?>
                         </tr>
                     </table>
                 </div>
                 
                 <?php if (!empty($bill->post_content)): ?>
-                    <div style="margin-top: 30px;">
-                        <h3 style="font-size: 14px; margin-bottom: 10px;"><?php _e('Notes:', 'black-rock-billing'); ?></h3>
-                        <p style="color: #666; line-height: 1.6;"><?php echo wp_kses_post(nl2br($bill->post_content)); ?></p>
+                    <div class="notes-section">
+                        <h3><?php _e('Notes:', 'black-rock-billing'); ?></h3>
+                        <p><?php echo wp_kses_post(nl2br($bill->post_content)); ?></p>
                     </div>
                 <?php endif; ?>
             </div>
             
             <div class="footer">
-                <p><?php echo esc_html(get_bloginfo('name')); ?> - <?php echo esc_html(get_bloginfo('url')); ?></p>
                 <p><?php _e('This is a computer-generated document. No signature is required.', 'black-rock-billing'); ?></p>
             </div>
         </body>
@@ -253,16 +364,28 @@ class BRB_PDF {
         
         $pdf->SetCreator('Black Rock Billing');
         $pdf->SetAuthor(get_bloginfo('name'));
-        $pdf->SetTitle('Bill - ' . $bill_number);
-        $pdf->SetSubject('Bill');
+        $pdf->SetTitle('Invoice - ' . $bill_number);
+        $pdf->SetSubject('Invoice');
         
+        // Remove timestamps
+        $pdf->SetCreationDate('');
+        $pdf->SetModDate('');
+        
+        // Disable all headers and footers
         $pdf->setPrintHeader(false);
         $pdf->setPrintFooter(false);
+        $pdf->SetHeaderData('', 0, '', '');
+        $pdf->SetFooterData('', 0, '', '');
+        
+        // Set margins to remove any header/footer space
+        $pdf->SetMargins(15, 15, 15);
+        $pdf->SetHeaderMargin(0);
+        $pdf->SetFooterMargin(0);
         
         $pdf->AddPage();
         $pdf->writeHTML($html, true, false, true, false, '');
         
-        $filename = 'bill-' . sanitize_file_name($bill_number) . '.pdf';
+        $filename = 'invoice-' . sanitize_file_name($bill_number) . '.pdf';
         
         $pdf->Output($filename, 'D');
         exit;
@@ -277,7 +400,21 @@ class BRB_PDF {
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
         
-        $filename = 'bill-' . sanitize_file_name($bill_number) . '.pdf';
+        // Remove timestamps from metadata if possible
+        try {
+            $canvas = $dompdf->getCanvas();
+            if (method_exists($canvas, 'get_cpdf')) {
+                $cpdf = $canvas->get_cpdf();
+                if ($cpdf && method_exists($cpdf, 'setInfo')) {
+                    $cpdf->setInfo('CreationDate', '');
+                    $cpdf->setInfo('ModDate', '');
+                }
+            }
+        } catch (Exception $e) {
+            // Ignore if metadata removal fails
+        }
+        
+        $filename = 'invoice-' . sanitize_file_name($bill_number) . '.pdf';
         $dompdf->stream($filename, array('Attachment' => 1));
         exit;
     }
@@ -286,10 +423,14 @@ class BRB_PDF {
      * Generate print-friendly HTML (fallback - uses browser print to PDF)
      */
     private static function generate_print_html($html, $bill_number) {
-        // Add print script and auto-print
+        // Add print script and auto-print with settings to hide URL
         $html = str_replace('</body>', '
         <script>
             window.onload = function() {
+                // Hide any URL that might appear
+                var style = document.createElement("style");
+                style.textContent = "@media print { @page { margin: 0; } body { margin: 0 !important; padding: 30px !important; } }";
+                document.head.appendChild(style);
                 window.print();
             };
         </script>
