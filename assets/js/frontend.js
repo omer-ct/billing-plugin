@@ -396,16 +396,46 @@
         }
         
         // ===== RETURN ITEMS FUNCTIONALITY (FRONTEND) =====
-        var returnIndexFrontend = $('.brb-return-row-frontend').length;
+        // Calculate the highest index from existing return items
+        var returnIndexFrontend = 0;
+        $('.brb-return-row-frontend').each(function() {
+            var $row = $(this);
+            var $descInput = $row.find('.brb-return-description-frontend');
+            var nameAttr = $descInput.attr('name');
+            if (nameAttr) {
+                var match = nameAttr.match(/\[(\d+)\]/);
+                if (match) {
+                    var index = parseInt(match[1]);
+                    if (index >= returnIndexFrontend) {
+                        returnIndexFrontend = index + 1;
+                    }
+                }
+            }
+        });
         
         // Add new return item (frontend)
         $(document).on('click', '.brb-add-return-frontend', function(e) {
             e.preventDefault();
             
+            // Get the current highest index from existing rows
+            var maxIndex = -1;
+            $('.brb-return-row-frontend').each(function() {
+                var $row = $(this);
+                var $descInput = $row.find('.brb-return-description-frontend');
+                var nameAttr = $descInput.attr('name');
+                if (nameAttr) {
+                    var match = nameAttr.match(/\[(\d+)\]/);
+                    if (match && parseInt(match[1]) > maxIndex) {
+                        maxIndex = parseInt(match[1]);
+                    }
+                }
+            });
+            returnIndexFrontend = maxIndex + 1;
+            
             var newRow = $('<tr class="brb-return-row-frontend" data-index="' + returnIndexFrontend + '">' +
-                '<td><input type="text" class="brb-return-description-frontend" placeholder="Return item description" /></td>' +
-                '<td><input type="number" class="brb-return-quantity-frontend" step="0.01" min="0" value="1" /></td>' +
-                '<td><input type="number" class="brb-return-rate-frontend" step="0.01" min="0" /></td>' +
+                '<td><input type="text" name="brb_return_items[' + returnIndexFrontend + '][description]" class="brb-return-description-frontend" placeholder="Return item description" /></td>' +
+                '<td><input type="number" name="brb_return_items[' + returnIndexFrontend + '][quantity]" class="brb-return-quantity-frontend" step="0.01" min="0" value="1" /></td>' +
+                '<td><input type="number" name="brb_return_items[' + returnIndexFrontend + '][rate]" class="brb-return-rate-frontend" step="0.01" min="0" /></td>' +
                 '<td><span class="brb-return-total-frontend">' + brb_format_currency(0) + '</span></td>' +
                 '<td><button type="button" class="brb-icon-btn brb-icon-btn-remove brb-remove-return-frontend" title="Remove Return Item">' +
                 '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +

@@ -1967,12 +1967,23 @@ class BRB_Frontend {
         $original_total = brb_get_bill_total($bill_id);
         $adjusted_total = max(0, $original_total - $return_total);
         
+        // Recalculate refund due based on current paid amount and adjusted total
+        // This is important for bills with negative payments (overpaid)
+        $paid_amount = brb_get_paid_amount($bill_id);
+        $refund_due = 0;
+        if ($paid_amount > $adjusted_total) {
+            $refund_due = $paid_amount - $adjusted_total;
+        }
+        update_post_meta($bill_id, '_brb_refund_due', $refund_due);
+        
         wp_send_json_success(array(
             'message' => __('Return items saved successfully.', 'black-rock-billing'),
             'return_total' => $return_total,
             'adjusted_total' => $adjusted_total,
+            'refund_due' => $refund_due,
             'formatted_return_total' => brb_format_currency($return_total),
             'formatted_adjusted_total' => brb_format_currency($adjusted_total),
+            'formatted_refund_due' => brb_format_currency($refund_due),
         ));
     }
     
