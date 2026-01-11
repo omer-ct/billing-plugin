@@ -31,6 +31,9 @@ class BRB_Frontend {
         add_action('wp_ajax_brb_update_bill', array($this, 'ajax_update_bill'));
         add_action('wp_ajax_brb_save_customer', array($this, 'ajax_save_customer'));
         add_action('wp_ajax_brb_import_invoices_csv', array($this, 'ajax_import_invoices_csv'));
+        add_action('wp_ajax_brb_search_products', array($this, 'ajax_search_products'));
+        add_action('wp_ajax_brb_get_inventory_history', array($this, 'ajax_get_inventory_history'));
+        add_action('wp_ajax_brb_save_product', array($this, 'ajax_save_product'));
         
         // PDF download
         add_action('init', array($this, 'handle_pdf_download'));
@@ -55,6 +58,17 @@ class BRB_Frontend {
         add_rewrite_rule('^billing-dashboard/customers/edit/([0-9]+)/?$', 'index.php?brb_page=customer-edit&brb_customer_id=$matches[1]', 'top');
         add_rewrite_rule('^billing-dashboard/settings/?$', 'index.php?brb_page=settings', 'top');
         add_rewrite_rule('^billing-dashboard/import/?$', 'index.php?brb_page=import', 'top');
+        add_rewrite_rule('^billing-dashboard/inventory/?$', 'index.php?brb_page=inventory', 'top');
+        add_rewrite_rule('^billing-dashboard/inventory/add/?$', 'index.php?brb_page=product-add', 'top');
+        add_rewrite_rule('^billing-dashboard/inventory/edit/([0-9]+)/?$', 'index.php?brb_page=product-edit&brb_product_id=$matches[1]', 'top');
+        add_rewrite_rule('^billing-dashboard/reports/?$', 'index.php?brb_page=reports', 'top');
+        
+        // Flush rewrite rules if reports rule version is outdated
+        $current_version = get_option('brb_rewrite_rules_version', '0');
+        if ($current_version !== '3') {
+            flush_rewrite_rules(false);
+            update_option('brb_rewrite_rules_version', '3');
+        }
     }
     
     /**
@@ -66,7 +80,7 @@ class BRB_Frontend {
             
             // Check permissions
             if (!brb_can_user_view_bill($bill_id)) {
-                wp_die(__('You do not have permission to download this bill.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                    wp_die(__('You do not have permission to download this invoice.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
             }
             
             BRB_PDF::generate_pdf($bill_id);
@@ -85,6 +99,7 @@ class BRB_Frontend {
         $vars[] = 'brb_page';
         $vars[] = 'brb_bill_id';
         $vars[] = 'brb_customer_id';
+        $vars[] = 'brb_product_id';
         return $vars;
     }
     
@@ -131,7 +146,7 @@ class BRB_Frontend {
                 
             case 'all-bills':
                 if (!current_user_can('manage_options')) {
-                    wp_die(__('You do not have permission to view all bills.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                    wp_die(__('You do not have permission to view all invoices.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
                 }
                 $this->render_all_bills();
                 exit;
@@ -179,6 +194,35 @@ class BRB_Frontend {
                 }
                 $this->render_import();
                 exit;
+                
+            case 'inventory':
+                if (!current_user_can('manage_options')) {
+                    wp_die(__('You do not have permission to view inventory.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                }
+                $this->render_inventory();
+                exit;
+                
+            case 'reports':
+                if (!current_user_can('manage_options')) {
+                    wp_die(__('You do not have permission to view reports.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                }
+                $this->render_reports();
+                exit;
+                
+            case 'product-add':
+                if (!current_user_can('manage_options')) {
+                    wp_die(__('You do not have permission to add products.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                }
+                $this->render_add_product();
+                exit;
+                
+            case 'product-edit':
+                if (!current_user_can('manage_options')) {
+                    wp_die(__('You do not have permission to edit products.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                }
+                $product_id = intval(get_query_var('brb_product_id'));
+                $this->render_edit_product($product_id);
+                exit;
         }
     }
     
@@ -192,7 +236,7 @@ class BRB_Frontend {
             $bill_id = intval(get_query_var('brb_bill_id'));
             
             if ($bill_id && !brb_can_user_view_bill($bill_id)) {
-                wp_die(__('You do not have permission to view this bill.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+                wp_die(__('You do not have permission to view this invoice.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
             }
         }
     }
@@ -247,58 +291,12 @@ class BRB_Frontend {
                     ?>
                 </p>
                 
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link active">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <?php if (current_user_can('manage_options')): ?>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                            <?php _e('Customers', 'black-rock-billing'); ?>
-                        </a>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="8.5" cy="7" r="4"></circle>
-                                <line x1="20" y1="8" x2="20" y2="14"></line>
-                                <line x1="23" y1="11" x2="17" y2="11"></line>
-                            </svg>
-                            <?php _e('Add Customer', 'black-rock-billing'); ?>
-                        </a>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="12" y1="18" x2="12" y2="12"></line>
-                                <line x1="9" y1="15" x2="15" y2="15"></line>
-                            </svg>
-                            <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                        </a>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                            </svg>
-                            <?php _e('Settings', 'black-rock-billing'); ?>
-                        </a>
-                    <?php endif; ?>
-                </div>
+                <?php $this->render_navigation_menu('dashboard'); ?>
             </div>
             
             <div class="brb-summary-cards">
-                <div class="brb-summary-card">
-                    <div class="brb-summary-card-icon">
+                <div class="brb-summary-card" style="border-top: 7px solid #3b82f6;">
+                    <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #3b82f6;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
@@ -310,8 +308,8 @@ class BRB_Frontend {
                     <h3><?php _e('Total Billed', 'black-rock-billing'); ?></h3>
                     <p class="brb-amount"><?php echo brb_format_currency($total_billed); ?></p>
                 </div>
-                <div class="brb-summary-card">
-                    <div class="brb-summary-card-icon brb-icon-paid">
+                <div class="brb-summary-card" style="border-top: 7px solid #10b981;">
+                    <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #10b981;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                             <polyline points="22 4 12 14.01 9 11.01"></polyline>
@@ -320,8 +318,8 @@ class BRB_Frontend {
                     <h3><?php _e('Total Paid', 'black-rock-billing'); ?></h3>
                     <p class="brb-amount brb-paid"><?php echo brb_format_currency($total_paid); ?></p>
                 </div>
-                <div class="brb-summary-card" style="border-top-color: <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
-                    <div class="brb-summary-card-icon brb-icon-pending">
+                <div class="brb-summary-card" style="border-top: 7px solid <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
+                    <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <polyline points="12 6 12 12 16 14"></polyline>
@@ -487,65 +485,145 @@ class BRB_Frontend {
         
         get_header();
         ?>
-        <div class="brb-bill-view-container">
-            <div class="brb-bill-header">
-                <div class="brb-bill-header-links">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-back-link">
-                        ← <?php _e('Back to Dashboard', 'black-rock-billing'); ?>
-                    </a>
+        <div class="brb-create-bill-container">
+            <div class="brb-page-header">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; flex-wrap: wrap; gap: 15px;">
+                    <h1><?php _e('Invoice Details', 'black-rock-billing'); ?> - <?php echo esc_html($bill_number ?: '#' . $bill_id); ?></h1>
                     <?php if ($customer_id && current_user_can('manage_options')): ?>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/' . $customer_id)); ?>" class="brb-back-link">
-                            ← <?php _e('Back to Customer', 'black-rock-billing'); ?>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/' . $customer_id)); ?>" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none; border-radius: 10px; color: #fff; text-decoration: none; font-weight: 600; font-size: 14px; transition: all 0.3s; box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);" onmouseover="this.style.background='linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.4)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'; this.style.boxShadow='0 2px 8px rgba(59, 130, 246, 0.3)'; this.style.transform='translateY(0)'">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M19 12H5"></path>
+                                <path d="M12 19l-7-7 7-7"></path>
+                            </svg>
+                            <?php _e('Back to Customer', 'black-rock-billing'); ?>
                         </a>
                     <?php endif; ?>
                 </div>
-                <h1><?php _e('Invoice Details', 'black-rock-billing'); ?></h1>
+                <?php $this->render_navigation_menu('dashboard'); ?>
             </div>
             
-            <div class="brb-bill-document">
-                <div class="brb-bill-header-info">
-                    <div class="brb-bill-company">
-                        <h2><?php bloginfo('name'); ?></h2>
-                        <p><?php bloginfo('description'); ?></p>
-                    </div>
-                    <div class="brb-bill-meta">
-                        <p><strong><?php _e('Invoice Number:', 'black-rock-billing'); ?></strong> <?php echo esc_html($bill_number ?: 'N/A'); ?></p>
-                        <p><strong><?php _e('Invoice Date:', 'black-rock-billing'); ?></strong> <?php echo $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '—'; ?></p>
-                        <p><strong><?php _e('Due Date:', 'black-rock-billing'); ?></strong> <?php echo $due_date ? date_i18n(get_option('date_format'), strtotime($due_date)) : '—'; ?></p>
-                        <p><strong><?php _e('Status:', 'black-rock-billing'); ?></strong> 
-                            <span class="brb-status brb-status-<?php echo esc_attr($status); ?>">
-                                <?php echo esc_html(ucfirst($status)); ?>
-                            </span>
-                        </p>
-                    </div>
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden; margin-bottom: 25px;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        <?php _e('Invoice Information', 'black-rock-billing'); ?>
+                    </h2>
                 </div>
                 
-                <div class="brb-bill-customer">
-                    <h3><?php _e('Invoice To:', 'black-rock-billing'); ?></h3>
-                    <?php if ($customer): 
-                        $phone = brb_get_customer_phone($customer_id);
-                        $display_name = brb_format_customer_name($customer->display_name);
-                    ?>
-                        <p><strong><?php echo esc_html($display_name); ?></strong></p>
-                        <p>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                                <polyline points="22,6 12,13 2,6"></polyline>
-                            </svg>
-                            <?php echo esc_html($customer->user_email); ?>
-                        </p>
-                        <?php if ($phone): ?>
-                        <p>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 2 0 0 1 22 16.92z"></path>
-                            </svg>
-                            <a href="tel:<?php echo esc_attr($phone); ?>"><?php echo esc_html($phone); ?></a>
-                        </p>
+                <div style="padding: 30px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 25px; margin-bottom: 30px;">
+                    <div style="background: #fff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; transition: all 0.3s;">
+                        <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <h3 style="margin: 0; font-size: 1.1em; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="8.5" cy="7" r="4"></circle>
+                                </svg>
+                                <?php _e('Invoice To', 'black-rock-billing'); ?>
+                            </h3>
+                        </div>
+                        <?php if ($customer): 
+                            $phone = brb_get_customer_phone($customer_id);
+                            $display_name = brb_format_customer_name($customer->display_name);
+                        ?>
+                            <div style="padding: 24px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #f1f5f9;">
+                                    <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #fff;">
+                                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="8.5" cy="7" r="4"></circle>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p style="margin: 0; font-size: 1.2em; font-weight: 700; color: #1e293b; line-height: 1.3;"><?php echo esc_html($display_name); ?></p>
+                                    </div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 16px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; transition: all 0.2s;">
+                                        <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #0284c7;">
+                                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                                <polyline points="22,6 12,13 2,6"></polyline>
+                                            </svg>
+                                        </div>
+                                        <div style="flex: 1; min-width: 0;">
+                                            <p style="margin: 0; font-size: 0.85em; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;"><?php _e('Email', 'black-rock-billing'); ?></p>
+                                            <p style="margin: 0; font-size: 0.95em; color: #1e293b; font-weight: 500; word-break: break-word;"><?php echo esc_html($customer->user_email); ?></p>
+                                        </div>
+                                    </div>
+                                    <?php if ($phone): ?>
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; transition: all 0.2s;">
+                                        <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #16a34a;">
+                                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 2 0 0 1 22 16.92z"></path>
+                                            </svg>
+                                        </div>
+                                        <div style="flex: 1; min-width: 0;">
+                                            <p style="margin: 0; font-size: 0.85em; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;"><?php _e('Phone', 'black-rock-billing'); ?></p>
+                                            <a href="tel:<?php echo esc_attr($phone); ?>" style="margin: 0; font-size: 0.95em; color: #1e293b; font-weight: 500; text-decoration: none; display: block;"><?php echo esc_html($phone); ?></a>
+                                        </div>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         <?php endif; ?>
-                    <?php endif; ?>
+                    </div>
+                    
+                    <div style="background: #fff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 8px rgba(0,0,0,0.04); overflow: hidden; transition: all 0.3s;">
+                        <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <h3 style="margin: 0; font-size: 1.1em; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                                <?php _e('Invoice Details', 'black-rock-billing'); ?>
+                            </h3>
+                        </div>
+                        <div style="padding: 24px;">
+                            <div style="display: flex; flex-direction: column; gap: 20px;">
+                                <div style="padding-bottom: 20px; border-bottom: 1px solid #f1f5f9;">
+                                    <p style="margin: 0 0 8px 0; font-size: 0.85em; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Invoice Number', 'black-rock-billing'); ?></p>
+                                    <p style="margin: 0; font-size: 1.3em; font-weight: 700; color: #1e293b; letter-spacing: -0.3px;"><?php echo esc_html($bill_number ?: 'N/A'); ?></p>
+                                </div>
+                                
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                    <div>
+                                        <p style="margin: 0 0 8px 0; font-size: 0.85em; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Invoice Date', 'black-rock-billing'); ?></p>
+                                        <p style="margin: 0; font-size: 1em; font-weight: 600; color: #1e293b;"><?php echo $bill_date ? date_i18n(get_option('date_format'), strtotime($bill_date)) : '—'; ?></p>
+                                    </div>
+                                    
+                                    <div>
+                                        <p style="margin: 0 0 8px 0; font-size: 0.85em; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Due Date', 'black-rock-billing'); ?></p>
+                                        <p style="margin: 0; font-size: 1em; font-weight: 600; color: #1e293b;"><?php echo $due_date ? date_i18n(get_option('date_format'), strtotime($due_date)) : '—'; ?></p>
+                                    </div>
+                                </div>
+                                
+                                <div style="padding-top: 20px; border-top: 1px solid #f1f5f9;">
+                                    <p style="margin: 0 0 12px 0; font-size: 0.85em; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Status', 'black-rock-billing'); ?></p>
+                                    <span class="brb-status brb-status-<?php echo esc_attr($status); ?>" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 0.9em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                        <?php echo esc_html(ucfirst($status)); ?>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="brb-bill-items">
+                <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 30px;">
+                    <h3 style="margin: 0 0 20px 0; font-size: 1.3em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        <?php _e('Invoice Items', 'black-rock-billing'); ?>
+                    </h3>
                     <table class="brb-items-table">
                         <thead>
                             <tr>
@@ -606,8 +684,15 @@ class BRB_Frontend {
                 </div>
                 
                 <?php if (!empty($return_items)): ?>
-                <div class="brb-return-items-section">
-                    <h3><?php _e('Return Items', 'black-rock-billing'); ?></h3>
+                <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 30px;">
+                    <h3 style="margin: 0 0 20px 0; font-size: 1.3em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #dc2626;">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <?php _e('Return Items', 'black-rock-billing'); ?>
+                    </h3>
                     <table class="brb-items-table">
                         <thead>
                             <tr>
@@ -638,28 +723,111 @@ class BRB_Frontend {
                 <?php endif; ?>
                 
                 <?php if (!empty($bill->post_content)): ?>
-                    <div class="brb-bill-notes">
-                        <h3><?php _e('Notes', 'black-rock-billing'); ?></h3>
-                        <div class="brb-notes-content">
+                    <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 30px;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 1.3em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <?php _e('Notes', 'black-rock-billing'); ?>
+                        </h3>
+                        <div style="background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; color: #475569; line-height: 1.6;">
                             <?php echo wp_kses_post(wpautop($bill->post_content)); ?>
                         </div>
                     </div>
                 <?php endif; ?>
                 
-                <div class="brb-bill-actions">
+                <div style="margin-top: 30px; padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
                     <?php if (current_user_can('manage_options')): ?>
-                        <a href="<?php echo esc_url(home_url('/billing-dashboard/edit/' . $bill_id)); ?>" class="brb-edit-bill">
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/edit/' . $bill_id)); ?>" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px; text-decoration: none;">
                             <?php _e('Edit Invoice', 'black-rock-billing'); ?>
                         </a>
                     <?php endif; ?>
-                    <a href="<?php echo esc_url(add_query_arg(array('brb_download_pdf' => '1', 'bill_id' => $bill_id), home_url())); ?>" class="brb-download-pdf">
+                    <a href="<?php echo esc_url(add_query_arg(array('brb_download_pdf' => '1', 'bill_id' => $bill_id), home_url())); ?>" class="button" style="padding: 14px 32px; font-weight: 600; font-size: 15px; text-decoration: none;">
                         <?php _e('Download PDF', 'black-rock-billing'); ?>
                     </a>
+                </div>
                 </div>
             </div>
         </div>
         <?php
         get_footer();
+    }
+    
+    /**
+     * Render consistent navigation menu
+     */
+    private function render_navigation_menu($active_page = '') {
+        ?>
+        <div class="brb-dashboard-nav">
+            <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link <?php echo $active_page === 'dashboard' ? 'active' : ''; ?>">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                </svg>
+                <?php _e('Dashboard', 'black-rock-billing'); ?>
+            </a>
+            <?php if (current_user_can('manage_options')): ?>
+                <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link <?php echo $active_page === 'customers' ? 'active' : ''; ?>">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <?php _e('Customers', 'black-rock-billing'); ?>
+                </a>
+                <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link <?php echo $active_page === 'customer-add' ? 'active' : ''; ?>">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="8.5" cy="7" r="4"></circle>
+                        <line x1="20" y1="8" x2="20" y2="14"></line>
+                        <line x1="23" y1="11" x2="17" y2="11"></line>
+                    </svg>
+                    <?php _e('Add Customer', 'black-rock-billing'); ?>
+                </a>
+                <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link <?php echo $active_page === 'create' ? 'active' : ''; ?>">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                    </svg>
+                    <?php _e('Create Invoice', 'black-rock-billing'); ?>
+                </a>
+                <a href="<?php echo esc_url(home_url('/billing-dashboard/inventory')); ?>" class="brb-nav-link <?php echo $active_page === 'inventory' ? 'active' : ''; ?>">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <?php _e('Inventory', 'black-rock-billing'); ?>
+                </a>
+                <a href="<?php echo esc_url(home_url('/billing-dashboard/reports')); ?>" class="brb-nav-link <?php echo $active_page === 'reports' ? 'active' : ''; ?>">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <?php _e('Reports', 'black-rock-billing'); ?>
+                </a>
+                <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link <?php echo $active_page === 'settings' ? 'active' : ''; ?>">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    <?php _e('Settings', 'black-rock-billing'); ?>
+                </a>
+            <?php endif; ?>
+        </div>
+        <?php
     }
     
     /**
@@ -686,7 +854,7 @@ class BRB_Frontend {
         
         // Add create bill link for admins
         if (current_user_can('manage_options')) {
-            $create_link = '<li class="menu-item brb-create-bill-menu-item"><a href="' . esc_url(home_url('/billing-dashboard/create')) . '">' . __('Create Bill', 'black-rock-billing') . '</a></li>';
+            $create_link = '<li class="menu-item brb-create-bill-menu-item"><a href="' . esc_url(home_url('/billing-dashboard/create')) . '">' . __('Create Invoice', 'black-rock-billing') . '</a></li>';
             $items .= $dashboard_link . $create_link;
         } else {
             $items .= $dashboard_link;
@@ -734,83 +902,49 @@ class BRB_Frontend {
         </script>
         <div class="brb-create-bill-container">
             <div class="brb-page-header">
-                <h1><?php _e('Create New Bill', 'black-rock-billing'); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="8.5" cy="7" r="4"></circle>
-                            <line x1="20" y1="8" x2="20" y2="14"></line>
-                            <line x1="23" y1="11" x2="17" y2="11"></line>
-                        </svg>
-                        <?php _e('Add Customer', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link active">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                        <?php _e('Settings', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <h1><?php _e('Create New Invoice', 'black-rock-billing'); ?></h1>
+                <?php $this->render_navigation_menu('create'); ?>
             </div>
             
-            <form id="brb-create-bill-form" class="brb-bill-form">
+            <form id="brb-create-bill-form" class="brb-bill-form" style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; gap: 30px;">
                 <?php wp_nonce_field('brb_create_bill', 'brb_create_bill_nonce'); ?>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Bill Information', 'black-rock-billing'); ?></h2>
-                    
-                    <div class="brb-form-grid">
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0; box-shadow: none; border: none; overflow: hidden; margin-bottom: 0;">
+                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <?php _e('Invoice Information', 'black-rock-billing'); ?>
+                        </h2>
+                    </div>
+                    <div style="padding: 0 30px;">
+                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 30px;">
                         <div class="brb-form-row">
-                            <label for="brb_customer_search"><?php _e('Customer', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <div class="brb-customer-search-wrapper">
-                                <input type="text" id="brb_customer_search" class="brb-form-input" placeholder="<?php _e('Type to search customer...', 'black-rock-billing'); ?>" value="<?php echo esc_attr($preselected_display); ?>" autocomplete="off" />
+                            <label for="brb_customer_search" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Customer', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <div class="brb-customer-search-wrapper" style="position: relative;">
+                                <input type="text" id="brb_customer_search" class="brb-form-input" placeholder="<?php _e('Type to search customer...', 'black-rock-billing'); ?>" value="<?php echo esc_attr($preselected_display); ?>" autocomplete="off" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                                 <input type="hidden" id="brb_customer_id" name="brb_customer_id" value="<?php echo esc_attr($preselected_customer); ?>" required />
                                 <div id="brb-customer-dropdown" class="brb-customer-dropdown"></div>
                             </div>
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_bill_date"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
-                            <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo date('Y-m-d'); ?>" required class="brb-form-input" />
+                            <label for="brb_bill_date" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
+                            <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo date('Y-m-d'); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_due_date"><?php _e('Due Date', 'black-rock-billing'); ?></label>
-                            <input type="date" id="brb_due_date" name="brb_due_date" class="brb-form-input" />
+                            <label for="brb_due_date" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Due Date', 'black-rock-billing'); ?></label>
+                            <input type="date" id="brb_due_date" name="brb_due_date" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_status"><?php _e('Status', 'black-rock-billing'); ?></label>
-                            <select id="brb_status" name="brb_status" class="brb-form-select">
+                            <label for="brb_status" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Status', 'black-rock-billing'); ?></label>
+                            <select id="brb_status" name="brb_status" class="brb-form-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s;">
                                 <option value="draft" selected><?php _e('Draft', 'black-rock-billing'); ?></option>
                                 <option value="sent"><?php _e('Sent', 'black-rock-billing'); ?></option>
                                 <option value="paid"><?php _e('Paid', 'black-rock-billing'); ?></option>
@@ -819,66 +953,92 @@ class BRB_Frontend {
                         </div>
                     </div>
                     
-                    <div class="brb-form-row brb-form-row-full">
-                        <label for="brb_bill_notes"><?php _e('Notes', 'black-rock-billing'); ?></label>
-                        <textarea id="brb_bill_notes" name="brb_bill_notes" rows="4" class="brb-form-textarea brb-form-textarea-full"></textarea>
+                    <div class="brb-form-row brb-form-row-full" style="margin-top: 20px; margin-bottom: 30px;">
+                        <label for="brb_bill_notes" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Notes', 'black-rock-billing'); ?></label>
+                        <textarea id="brb_bill_notes" name="brb_bill_notes" rows="4" class="brb-form-textarea brb-form-textarea-full" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;"></textarea>
+                    </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Bill Items', 'black-rock-billing'); ?></h2>
-                    <div id="brb-items-container-frontend">
-                        <table class="brb-items-table-frontend">
-                            <thead>
-                                <tr>
-                                    <th><?php _e('Description', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Quantity', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Rate', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Total', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Actions', 'black-rock-billing'); ?></th>
-                                </tr>
-                            </thead>
-                            <tbody id="brb-items-tbody-frontend">
-                                <tr class="brb-item-row-frontend">
-                                    <td><input type="text" name="brb_items[0][description]" class="brb-item-description" placeholder="<?php _e('Item description', 'black-rock-billing'); ?>" /></td>
-                                    <td><input type="number" name="brb_items[0][quantity]" class="brb-item-quantity" step="0.01" min="0" value="1" /></td>
-                                    <td><input type="number" name="brb_items[0][rate]" class="brb-item-rate" step="0.01" min="0" /></td>
-                                    <td><span class="brb-item-total"><?php echo brb_format_currency(0); ?></span></td>
-                                    <td><button type="button" class="brb-icon-btn brb-icon-btn-remove brb-remove-item-frontend" title="<?php _e('Remove Item', 'black-rock-billing'); ?>">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="3 6 5 6 21 6"></polyline>
-                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                        </svg>
-                                    </button></td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td colspan="3" style="text-align: right;"><strong><?php _e('Total Amount:', 'black-rock-billing'); ?></strong></td>
-                                    <td><strong id="brb-grand-total-frontend"><?php echo brb_format_currency(0); ?></strong></td>
-                                    <td><button type="button" class="brb-icon-btn brb-icon-btn-add brb-add-item-frontend" title="<?php _e('Add Item', 'black-rock-billing'); ?>">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                    </button></td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
+                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <?php _e('Invoice Items', 'black-rock-billing'); ?>
+                    </h2>
+                    <div>
+                        <div id="brb-items-container-frontend">
+                            <table class="brb-items-table-frontend">
+                                <thead>
+                                    <tr>
+                                        <th><?php _e('Description', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Quantity', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Rate', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Total', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Actions', 'black-rock-billing'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="brb-items-tbody-frontend">
+                                    <tr class="brb-item-row-frontend">
+                                        <td>
+                                            <div class="brb-product-search-wrapper" style="position: relative;">
+                                                <input type="text" name="brb_items[0][description]" class="brb-item-description" placeholder="<?php _e('Item description or search product...', 'black-rock-billing'); ?>" autocomplete="off" />
+                                                <input type="hidden" name="brb_items[0][product_id]" class="brb-item-product-id" value="" />
+                                                <div class="brb-product-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                                            </div>
+                                        </td>
+                                        <td><input type="number" name="brb_items[0][quantity]" class="brb-item-quantity" step="0.01" min="0" value="1" /></td>
+                                        <td><input type="number" name="brb_items[0][rate]" class="brb-item-rate" step="0.01" min="0" /></td>
+                                        <td><span class="brb-item-total"><?php echo brb_format_currency(0); ?></span></td>
+                                        <td><button type="button" class="brb-icon-btn brb-icon-btn-remove brb-remove-item-frontend" title="<?php _e('Remove Item', 'black-rock-billing'); ?>">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                        </button></td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="3" style="text-align: right;"><strong><?php _e('Total Amount:', 'black-rock-billing'); ?></strong></td>
+                                        <td><strong id="brb-grand-total-frontend"><?php echo brb_format_currency(0); ?></strong></td>
+                                        <td><button type="button" class="brb-icon-btn brb-icon-btn-add brb-add-item-frontend" title="<?php _e('Add Item', 'black-rock-billing'); ?>">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                            </svg>
+                                        </button></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Payment Information', 'black-rock-billing'); ?></h2>
-                    <div class="brb-form-row">
-                        <label for="brb_paid_amount"><?php _e('Paid Amount', 'black-rock-billing'); ?></label>
-                        <input type="number" id="brb_paid_amount" name="brb_paid_amount" step="0.01" min="0" value="0" />
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
+                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <?php _e('Payment Information', 'black-rock-billing'); ?>
+                    </h2>
+                    <div>
+                        <div class="brb-form-row" style="max-width: 400px;">
+                        <label for="brb_paid_amount" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Paid Amount', 'black-rock-billing'); ?></label>
+                        <input type="number" id="brb_paid_amount" name="brb_paid_amount" step="0.01" min="0" value="0" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                    </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-actions">
-                    <button type="submit" class="button button-primary button-large"><?php _e('Create Invoice', 'black-rock-billing'); ?></button>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="button button-large"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                <div class="brb-form-actions" style="padding: 25px 30px 0; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                    <button type="submit" class="button button-primary button-large" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Create Invoice', 'black-rock-billing'); ?></button>
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="button button-large" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                 </div>
                 
                 <div id="brb-form-messages"></div>
@@ -904,7 +1064,7 @@ class BRB_Frontend {
         }
         
         if (!current_user_can('edit_post', $bill_id)) {
-            wp_die(__('You do not have permission to edit this bill.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+            wp_die(__('You do not have permission to edit this invoice.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
         }
         
         // Get bill data
@@ -945,70 +1105,36 @@ class BRB_Frontend {
         <div class="brb-create-bill-container">
             <div class="brb-page-header">
                 <h1><?php _e('Edit Invoice', 'black-rock-billing'); ?> - <?php echo esc_html($bill_number ?: '#' . $bill_id); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill_id)); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <?php _e('View Invoice', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="8.5" cy="7" r="4"></circle>
-                            <line x1="20" y1="8" x2="20" y2="14"></line>
-                            <line x1="23" y1="11" x2="17" y2="11"></line>
-                        </svg>
-                        <?php _e('Add Customer', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <?php $this->render_navigation_menu('create'); ?>
             </div>
             
-            <form id="brb-edit-bill-form" class="brb-bill-form">
+            <form id="brb-edit-bill-form" class="brb-bill-form" style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; gap: 30px;">
                 <?php wp_nonce_field('brb_edit_bill', 'brb_edit_bill_nonce'); ?>
                 <input type="hidden" name="brb_bill_id" value="<?php echo esc_attr($bill_id); ?>" />
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Bill Information', 'black-rock-billing'); ?></h2>
-                    
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0; box-shadow: none; border: none; overflow: hidden; margin-bottom: 0;">
+                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <?php _e('Invoice Information', 'black-rock-billing'); ?>
+                        </h2>
+                    </div>
+                    <div style="padding: 0 30px;">
                     <div class="brb-form-row brb-form-row-full">
-                        <label for="brb_bill_number"><?php _e('Invoice Number', 'black-rock-billing'); ?></label>
-                        <input type="text" id="brb_bill_number" name="brb_bill_number" value="<?php echo esc_attr($bill_number); ?>" readonly class="brb-form-input" />
-                        <p class="description"><?php _e('Invoice number cannot be changed', 'black-rock-billing'); ?></p>
+                        <label for="brb_bill_number" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Invoice Number', 'black-rock-billing'); ?></label>
+                        <input type="text" id="brb_bill_number" name="brb_bill_number" value="<?php echo esc_attr($bill_number); ?>" readonly class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #f8fafc; transition: all 0.3s;" />
+                        <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Invoice number cannot be changed', 'black-rock-billing'); ?></p>
                     </div>
                     
-                    <div class="brb-form-grid">
+                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
                         <div class="brb-form-row">
-                            <label for="brb_customer_search"><?php _e('Customer', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <div class="brb-customer-search-wrapper">
+                            <label for="brb_customer_search" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Customer', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <div class="brb-customer-search-wrapper" style="position: relative;">
                                 <?php
                                 $selected_customer_display = '';
                                 if ($customer_id) {
@@ -1018,25 +1144,25 @@ class BRB_Frontend {
                                     }
                                 }
                                 ?>
-                                <input type="text" id="brb_customer_search" class="brb-form-input" placeholder="<?php _e('Type to search customer...', 'black-rock-billing'); ?>" value="<?php echo esc_attr($selected_customer_display); ?>" autocomplete="off" />
+                                <input type="text" id="brb_customer_search" class="brb-form-input" placeholder="<?php _e('Type to search customer...', 'black-rock-billing'); ?>" value="<?php echo esc_attr($selected_customer_display); ?>" autocomplete="off" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                                 <input type="hidden" id="brb_customer_id" name="brb_customer_id" value="<?php echo esc_attr($customer_id); ?>" required />
                                 <div id="brb-customer-dropdown" class="brb-customer-dropdown"></div>
                             </div>
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_bill_date"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
-                            <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo esc_attr($bill_date ?: date('Y-m-d')); ?>" required class="brb-form-input" />
+                            <label for="brb_bill_date" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
+                            <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo esc_attr($bill_date ?: date('Y-m-d')); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_due_date"><?php _e('Due Date', 'black-rock-billing'); ?></label>
-                            <input type="date" id="brb_due_date" name="brb_due_date" value="<?php echo esc_attr($due_date); ?>" class="brb-form-input" />
+                            <label for="brb_due_date" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Due Date', 'black-rock-billing'); ?></label>
+                            <input type="date" id="brb_due_date" name="brb_due_date" value="<?php echo esc_attr($due_date); ?>" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_status"><?php _e('Status', 'black-rock-billing'); ?></label>
-                            <select id="brb_status" name="brb_status" class="brb-form-select">
+                            <label for="brb_status" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Status', 'black-rock-billing'); ?></label>
+                            <select id="brb_status" name="brb_status" class="brb-form-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s;">
                                 <option value="draft" <?php selected($status, 'draft'); ?>><?php _e('Draft', 'black-rock-billing'); ?></option>
                                 <option value="sent" <?php selected($status, 'sent'); ?>><?php _e('Sent', 'black-rock-billing'); ?></option>
                                 <option value="paid" <?php selected($status, 'paid'); ?>><?php _e('Paid', 'black-rock-billing'); ?></option>
@@ -1046,33 +1172,70 @@ class BRB_Frontend {
                         </div>
                     </div>
                     
-                    <div class="brb-form-row brb-form-row-full">
-                        <label for="brb_bill_notes"><?php _e('Notes', 'black-rock-billing'); ?></label>
-                        <textarea id="brb_bill_notes" name="brb_bill_notes" rows="4" class="brb-form-textarea brb-form-textarea-full"><?php echo esc_textarea($notes); ?></textarea>
+                    <div class="brb-form-row brb-form-row-full" style="margin-top: 20px;">
+                        <label for="brb_bill_notes" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Notes', 'black-rock-billing'); ?></label>
+                        <textarea id="brb_bill_notes" name="brb_bill_notes" rows="4" class="brb-form-textarea brb-form-textarea-full" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;"><?php echo esc_textarea($notes); ?></textarea>
+                    </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Bill Items', 'black-rock-billing'); ?></h2>
-                    <div id="brb-items-container-frontend">
-                        <table class="brb-items-table-frontend">
-                            <thead>
-                                <tr>
-                                    <th><?php _e('Description', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Quantity', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Rate', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Total', 'black-rock-billing'); ?></th>
-                                    <th><?php _e('Actions', 'black-rock-billing'); ?></th>
-                                </tr>
-                            </thead>
-                            <tbody id="brb-items-tbody-frontend">
-                                <?php if (!empty($items)): ?>
-                                    <?php foreach ($items as $index => $item): ?>
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
+                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <?php _e('Invoice Items', 'black-rock-billing'); ?>
+                    </h2>
+                    <div>
+                        <div id="brb-items-container-frontend">
+                            <table class="brb-items-table-frontend">
+                                <thead>
+                                    <tr>
+                                        <th><?php _e('Description', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Quantity', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Rate', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Total', 'black-rock-billing'); ?></th>
+                                        <th><?php _e('Actions', 'black-rock-billing'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="brb-items-tbody-frontend">
+                                    <?php if (!empty($items)): ?>
+                                        <?php foreach ($items as $index => $item): ?>
+                                            <tr class="brb-item-row-frontend">
+                                                <td>
+                                                    <div class="brb-product-search-wrapper" style="position: relative;">
+                                                        <input type="text" name="brb_items[<?php echo esc_attr($index); ?>][description]" class="brb-item-description" value="<?php echo esc_attr($item['description']); ?>" placeholder="<?php _e('Item description or search product...', 'black-rock-billing'); ?>" autocomplete="off" />
+                                                        <input type="hidden" name="brb_items[<?php echo esc_attr($index); ?>][product_id]" class="brb-item-product-id" value="" />
+                                                        <div class="brb-product-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                                                    </div>
+                                                </td>
+                                                <td><input type="number" name="brb_items[<?php echo esc_attr($index); ?>][quantity]" class="brb-item-quantity" step="0.01" min="0" value="<?php echo esc_attr($item['quantity']); ?>" /></td>
+                                                <td><input type="number" name="brb_items[<?php echo esc_attr($index); ?>][rate]" class="brb-item-rate" step="0.01" min="0" value="<?php echo esc_attr($item['rate']); ?>" /></td>
+                                                <td><span class="brb-item-total"><?php echo brb_format_currency(floatval($item['quantity']) * floatval($item['rate'])); ?></span></td>
+                                                <td><button type="button" class="brb-icon-btn brb-icon-btn-remove brb-remove-item-frontend" title="<?php _e('Remove Item', 'black-rock-billing'); ?>">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                        </button></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
                                         <tr class="brb-item-row-frontend">
-                                            <td><input type="text" name="brb_items[<?php echo esc_attr($index); ?>][description]" class="brb-item-description" value="<?php echo esc_attr($item['description']); ?>" placeholder="<?php _e('Item description', 'black-rock-billing'); ?>" /></td>
-                                            <td><input type="number" name="brb_items[<?php echo esc_attr($index); ?>][quantity]" class="brb-item-quantity" step="0.01" min="0" value="<?php echo esc_attr($item['quantity']); ?>" /></td>
-                                            <td><input type="number" name="brb_items[<?php echo esc_attr($index); ?>][rate]" class="brb-item-rate" step="0.01" min="0" value="<?php echo esc_attr($item['rate']); ?>" /></td>
-                                            <td><span class="brb-item-total"><?php echo brb_format_currency(floatval($item['quantity']) * floatval($item['rate'])); ?></span></td>
+                                            <td>
+                                                <div class="brb-product-search-wrapper" style="position: relative;">
+                                                    <input type="text" name="brb_items[0][description]" class="brb-item-description" placeholder="<?php _e('Item description or search product...', 'black-rock-billing'); ?>" autocomplete="off" />
+                                                    <input type="hidden" name="brb_items[0][product_id]" class="brb-item-product-id" value="" />
+                                                    <div class="brb-product-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+                                                </div>
+                                            </td>
+                                            <td><input type="number" name="brb_items[0][quantity]" class="brb-item-quantity" step="0.01" min="0" value="1" /></td>
+                                            <td><input type="number" name="brb_items[0][rate]" class="brb-item-rate" step="0.01" min="0" /></td>
+                                            <td><span class="brb-item-total"><?php echo brb_format_currency(0); ?></span></td>
                                             <td><button type="button" class="brb-icon-btn brb-icon-btn-remove brb-remove-item-frontend" title="<?php _e('Remove Item', 'black-rock-billing'); ?>">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <polyline points="3 6 5 6 21 6"></polyline>
@@ -1080,41 +1243,35 @@ class BRB_Frontend {
                                         </svg>
                                     </button></td>
                                         </tr>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <tr class="brb-item-row-frontend">
-                                        <td><input type="text" name="brb_items[0][description]" class="brb-item-description" placeholder="<?php _e('Item description', 'black-rock-billing'); ?>" /></td>
-                                        <td><input type="number" name="brb_items[0][quantity]" class="brb-item-quantity" step="0.01" min="0" value="1" /></td>
-                                        <td><input type="number" name="brb_items[0][rate]" class="brb-item-rate" step="0.01" min="0" /></td>
-                                        <td><span class="brb-item-total"><?php echo brb_format_currency(0); ?></span></td>
-                                        <td><button type="button" class="brb-icon-btn brb-icon-btn-remove brb-remove-item-frontend" title="<?php _e('Remove Item', 'black-rock-billing'); ?>">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <polyline points="3 6 5 6 21 6"></polyline>
-                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                        </svg>
-                                    </button></td>
+                                    <?php endif; ?>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="3" style="text-align: right;"><strong><?php _e('Total Amount:', 'black-rock-billing'); ?></strong></td>
+                                        <td><strong id="brb-grand-total-frontend"><?php echo brb_format_currency($total); ?></strong></td>
+                                        <td><button type="button" class="brb-icon-btn brb-icon-btn-add brb-add-item-frontend" title="<?php _e('Add Item', 'black-rock-billing'); ?>">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                            </svg>
+                                        </button></td>
                                     </tr>
-                                <?php endif; ?>
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td colspan="3" style="text-align: right;"><strong><?php _e('Total Amount:', 'black-rock-billing'); ?></strong></td>
-                                    <td><strong id="brb-grand-total-frontend"><?php echo brb_format_currency($total); ?></strong></td>
-                                    <td><button type="button" class="brb-icon-btn brb-icon-btn-add brb-add-item-frontend" title="<?php _e('Add Item', 'black-rock-billing'); ?>">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                    </button></td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                                </tfoot>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Return Items', 'black-rock-billing'); ?></h2>
-                    <p class="description"><?php _e('Add items that have been returned. The return amount will be deducted from the bill total.', 'black-rock-billing'); ?></p>
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
+                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <?php _e('Return Items', 'black-rock-billing'); ?>
+                    </h2>
+                    <p class="description" style="margin: 0; font-size: 13px; color: #64748b;"><?php _e('Add items that have been returned. The return amount will be deducted from the invoice total.', 'black-rock-billing'); ?></p>
                     <div id="brb-return-items-frontend-container">
                         <table class="brb-items-table-frontend" id="brb-returns-table-frontend">
                             <thead>
@@ -1160,32 +1317,70 @@ class BRB_Frontend {
                     </div>
                 </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Payment Information', 'black-rock-billing'); ?></h2>
-                    <div class="brb-form-row">
-                        <label for="brb_paid_amount"><?php _e('Paid Amount', 'black-rock-billing'); ?></label>
-                        <input type="number" id="brb_paid_amount" name="brb_paid_amount" step="0.01" min="0" value="<?php echo esc_attr($paid); ?>" />
-                        <p class="description"><?php _e('Enter the amount that has been paid for this bill.', 'black-rock-billing'); ?></p>
-                    </div>
-                    <div class="brb-payment-summary">
-                        <p><strong><?php _e('Original Total:', 'black-rock-billing'); ?></strong> <span id="brb-original-total-display"><?php echo brb_format_currency($total); ?></span></p>
-                        <p><strong><?php _e('Return Total:', 'black-rock-billing'); ?></strong> <span id="brb-return-total-display" style="color: #dc2626;">-<?php echo brb_format_currency(brb_get_return_total($bill_id)); ?></span></p>
-                        <p><strong><?php _e('Adjusted Total:', 'black-rock-billing'); ?></strong> <span id="brb-adjusted-total-display"><?php echo brb_format_currency(brb_get_adjusted_bill_total($bill_id)); ?></span></p>
-                        <?php 
-                        $refund_due_edit = brb_get_refund_due($bill_id);
-                        if ($refund_due_edit > 0): ?>
-                            <p id="brb-pending-row" style="display: none;"><strong><?php _e('Pending Amount:', 'black-rock-billing'); ?></strong> <span id="brb-pending-display"></span></p>
-                            <p id="brb-refund-row"><strong><?php _e('Refund Due to Customer:', 'black-rock-billing'); ?></strong> <span id="brb-refund-display" style="color: #dc2626; font-weight: 700;"><?php echo brb_format_currency($refund_due_edit); ?></span></p>
-                        <?php else: ?>
-                            <p id="brb-pending-row"><strong><?php _e('Pending Amount:', 'black-rock-billing'); ?></strong> <span id="brb-pending-display"><?php echo brb_format_currency(brb_get_pending_amount($bill_id)); ?></span></p>
-                            <p id="brb-refund-row" style="display: none;"><strong><?php _e('Refund Due to Customer:', 'black-rock-billing'); ?></strong> <span id="brb-refund-display" style="color: #dc2626; font-weight: 700;"></span></p>
-                        <?php endif; ?>
+                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
+                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <?php _e('Payment Information', 'black-rock-billing'); ?>
+                    </h2>
+                    <div style="padding-bottom: 30px;">
+                        <div class="brb-form-row" style="max-width: 400px; margin-bottom: 20px;">
+                            <label for="brb_paid_amount" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Paid Amount', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_paid_amount" name="brb_paid_amount" step="0.01" min="0" value="<?php echo esc_attr($paid); ?>" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Enter the amount that has been paid for this invoice.', 'black-rock-billing'); ?></p>
+                        </div>
+                        <div class="brb-payment-summary" style="background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 24px; margin-top: 20px;">
+                            <h4 style="margin: 0 0 20px 0; font-size: 1.1em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                                <?php _e('Payment Summary', 'black-rock-billing'); ?>
+                            </h4>
+                            <div style="display: flex; flex-direction: column; gap: 16px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                                    <span style="font-size: 0.9em; color: #64748b; font-weight: 600;"><?php _e('Original Total', 'black-rock-billing'); ?></span>
+                                    <span id="brb-original-total-display" style="font-size: 1.1em; font-weight: 700; color: #1e293b;"><?php echo brb_format_currency($total); ?></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                                    <span style="font-size: 0.9em; color: #64748b; font-weight: 600;"><?php _e('Return Total', 'black-rock-billing'); ?></span>
+                                    <span id="brb-return-total-display" style="font-size: 1.1em; font-weight: 700; color: #dc2626;">-<?php echo brb_format_currency(brb_get_return_total($bill_id)); ?></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 2px solid #e2e8f0;">
+                                    <span style="font-size: 0.9em; color: #64748b; font-weight: 600;"><?php _e('Adjusted Total', 'black-rock-billing'); ?></span>
+                                    <span id="brb-adjusted-total-display" style="font-size: 1.1em; font-weight: 700; color: #1e293b;"><?php echo brb_format_currency(brb_get_adjusted_bill_total($bill_id)); ?></span>
+                                </div>
+                                <?php 
+                                $refund_due_edit = brb_get_refund_due($bill_id);
+                                if ($refund_due_edit > 0): ?>
+                                    <div id="brb-pending-row" style="display: none; justify-content: space-between; align-items: center; padding: 12px 0;">
+                                        <span style="font-size: 0.9em; color: #64748b; font-weight: 600;"><?php _e('Pending Amount', 'black-rock-billing'); ?></span>
+                                        <span id="brb-pending-display" style="font-size: 1.1em; font-weight: 700; color: #1e293b;"></span>
+                                    </div>
+                                    <div id="brb-refund-row" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-radius: 8px; border: 2px solid #fecaca; margin-top: 8px;">
+                                        <span style="font-size: 0.95em; color: #991b1b; font-weight: 700;"><?php _e('Refund Due to Customer', 'black-rock-billing'); ?></span>
+                                        <span id="brb-refund-display" style="font-size: 1.3em; font-weight: 800; color: #dc2626;"><?php echo brb_format_currency($refund_due_edit); ?></span>
+                                    </div>
+                                <?php else: ?>
+                                    <div id="brb-pending-row" style="display: flex; justify-content: space-between; align-items: center; padding: 16px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; border: 2px solid #fcd34d; margin-top: 8px;">
+                                        <span style="font-size: 0.95em; color: #92400e; font-weight: 700;"><?php _e('Pending Amount', 'black-rock-billing'); ?></span>
+                                        <span id="brb-pending-display" style="font-size: 1.3em; font-weight: 800; color: #d97706;"><?php echo brb_format_currency(brb_get_pending_amount($bill_id)); ?></span>
+                                    </div>
+                                    <div id="brb-refund-row" style="display: none; justify-content: space-between; align-items: center; padding: 16px; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-radius: 8px; border: 2px solid #fecaca; margin-top: 8px;">
+                                        <span style="font-size: 0.95em; color: #991b1b; font-weight: 700;"><?php _e('Refund Due to Customer', 'black-rock-billing'); ?></span>
+                                        <span id="brb-refund-display" style="font-size: 1.3em; font-weight: 800; color: #dc2626;"></span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-actions">
-                    <button type="submit" class="button button-primary button-large"><?php _e('Save Changes', 'black-rock-billing'); ?></button>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill_id)); ?>" class="button button-large"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                <div class="brb-form-actions" style="padding: 25px 30px 0; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                    <button type="submit" class="button button-primary button-large" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Save Changes', 'black-rock-billing'); ?></button>
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard/bill/' . $bill_id)); ?>" class="button button-large" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                 </div>
                 
                 <div id="brb-form-messages"></div>
@@ -1217,18 +1412,20 @@ class BRB_Frontend {
             wp_send_json_error(array('message' => __('Please select a customer.', 'black-rock-billing')));
         }
         
-        // Calculate total
+        // Calculate total and process inventory
         $total = 0;
         $clean_items = array();
         foreach ($items as $item) {
             if (!empty($item['description'])) {
                 $quantity = floatval($item['quantity'] ?? 0);
                 $rate = floatval($item['rate'] ?? 0);
+                $product_id = isset($item['product_id']) ? intval($item['product_id']) : 0;
                 $total += $quantity * $rate;
                 $clean_items[] = array(
                     'description' => sanitize_text_field($item['description']),
                     'quantity' => $quantity,
                     'rate' => $rate,
+                    'product_id' => $product_id,
                 );
             }
         }
@@ -1259,6 +1456,13 @@ class BRB_Frontend {
         // Generate bill number
         brb_generate_bill_number($bill_id);
         
+        // Deduct inventory for products
+        foreach ($clean_items as $item) {
+            if (!empty($item['product_id']) && $item['product_id'] > 0 && $item['quantity'] > 0) {
+                brb_deduct_product_quantity($item['product_id'], $item['quantity'], $bill_id, 'sale');
+            }
+        }
+        
         // Send email notification if status is not draft
         if ($status !== 'draft') {
             BRB_Email::send_bill_notification($bill_id, 'created');
@@ -1266,7 +1470,7 @@ class BRB_Frontend {
         }
         
         wp_send_json_success(array(
-            'message' => __('Bill created successfully!', 'black-rock-billing'),
+            'message' => __('Invoice created successfully!', 'black-rock-billing'),
             'bill_id' => $bill_id,
             'redirect_url' => home_url('/billing-dashboard/bill/' . $bill_id)
         ));
@@ -1331,7 +1535,7 @@ class BRB_Frontend {
         $result = wp_delete_post($bill_id, true);
         
         if ($result) {
-            wp_send_json_success(array('message' => __('Bill deleted successfully!', 'black-rock-billing')));
+            wp_send_json_success(array('message' => __('Invoice deleted successfully!', 'black-rock-billing')));
         } else {
             wp_send_json_error(array('message' => __('Failed to delete bill.', 'black-rock-billing')));
         }
@@ -1533,6 +1737,22 @@ class BRB_Frontend {
             update_option('brb_bill_prefix', sanitize_text_field($_POST['brb_bill_prefix']));
         }
         
+        if (isset($_POST['brb_company_name'])) {
+            update_option('brb_company_name', sanitize_text_field($_POST['brb_company_name']));
+        }
+        
+        if (isset($_POST['brb_company_email'])) {
+            update_option('brb_company_email', sanitize_email($_POST['brb_company_email']));
+        }
+        
+        if (isset($_POST['brb_company_phone'])) {
+            update_option('brb_company_phone', sanitize_text_field($_POST['brb_company_phone']));
+        }
+        
+        if (isset($_POST['brb_company_address'])) {
+            update_option('brb_company_address', sanitize_textarea_field($_POST['brb_company_address']));
+        }
+        
         wp_redirect(add_query_arg('settings-updated', 'true', home_url('/billing-dashboard/settings')));
         exit;
     }
@@ -1556,52 +1776,8 @@ class BRB_Frontend {
         ?>
         <div class="brb-dashboard-container">
             <div class="brb-dashboard-header">
-                <h1><?php _e('All Bills', 'black-rock-billing'); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="8.5" cy="7" r="4"></circle>
-                            <line x1="20" y1="8" x2="20" y2="14"></line>
-                            <line x1="23" y1="11" x2="17" y2="11"></line>
-                        </svg>
-                        <?php _e('Add Customer', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                        <?php _e('Settings', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <h1><?php _e('All Invoices', 'black-rock-billing'); ?></h1>
+                <?php $this->render_navigation_menu('dashboard'); ?>
             </div>
             
             <div class="brb-bills-section">
@@ -1735,42 +1911,7 @@ class BRB_Frontend {
         <div class="brb-dashboard-container">
             <div class="brb-dashboard-header">
                 <h1><?php _e('Customers', 'black-rock-billing'); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link active">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                        <?php _e('Settings', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <?php $this->render_navigation_menu('customers'); ?>
             </div>
             
             <div class="brb-bills-section">
@@ -1900,51 +2041,7 @@ class BRB_Frontend {
         <div class="brb-dashboard-container">
             <div class="brb-dashboard-header">
                 <h1><?php printf(__('Customer: %s', 'black-rock-billing'), esc_html(brb_format_customer_name($customer->display_name))); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="8.5" cy="7" r="4"></circle>
-                            <line x1="20" y1="8" x2="20" y2="14"></line>
-                            <line x1="23" y1="11" x2="17" y2="11"></line>
-                        </svg>
-                        <?php _e('Add Customer', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                        <?php _e('Settings', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <?php $this->render_navigation_menu('customers'); ?>
             </div>
             
             <?php
@@ -1952,55 +2049,124 @@ class BRB_Frontend {
             $phone = brb_get_customer_phone($customer_id);
             ?>
             <div class="brb-customer-detail-frontend">
-                <div class="brb-customer-info-box">
-                    <h2><?php _e('Customer Information', 'black-rock-billing'); ?></h2>
-                    <div class="brb-customer-info-grid">
-                        <div class="brb-info-item">
-                            <span class="brb-info-label"><?php _e('Name:', 'black-rock-billing'); ?></span>
-                            <span class="brb-info-value"><?php echo esc_html($display_name); ?></span>
+                <div class="brb-customer-info-box" style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            <?php _e('Customer Information', 'black-rock-billing'); ?>
+                        </h2>
+                    </div>
+                    <div style="padding: 30px;">
+                        <div class="brb-customer-info-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+                            <div class="brb-info-item" style="background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; transition: all 0.3s; position: relative; overflow: hidden;">
+                                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);"></div>
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="12" cy="7" r="4"></circle>
+                                        </svg>
+                                    </div>
+                                    <span class="brb-info-label" style="font-size: 0.75em; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Name', 'black-rock-billing'); ?></span>
+                                </div>
+                                <span class="brb-info-value" style="font-size: 1.1em; color: #0f172a; font-weight: 600; display: block; margin-top: 4px;"><?php echo esc_html($display_name); ?></span>
+                            </div>
+                            
+                            <div class="brb-info-item" style="background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; transition: all 0.3s; position: relative; overflow: hidden;">
+                                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);"></div>
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); display: flex; align-items: center; justify-content: center; color: #10b981; flex-shrink: 0;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                            <polyline points="22,6 12,13 2,6"></polyline>
+                                        </svg>
+                                    </div>
+                                    <span class="brb-info-label" style="font-size: 0.75em; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Email', 'black-rock-billing'); ?></span>
+                                </div>
+                                <span class="brb-info-value" style="font-size: 1.1em; color: #0f172a; font-weight: 600; display: block; margin-top: 4px;">
+                                    <a href="mailto:<?php echo esc_attr($customer->user_email); ?>" style="color: #3b82f6; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; padding: 4px 0;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7;">
+                                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                            <polyline points="22,6 12,13 2,6"></polyline>
+                                        </svg>
+                                        <span><?php echo esc_html($customer->user_email); ?></span>
+                                    </a>
+                                </span>
+                            </div>
+                            
+                            <?php if ($phone): ?>
+                            <div class="brb-info-item" style="background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; transition: all 0.3s; position: relative; overflow: hidden;">
+                                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);"></div>
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); display: flex; align-items: center; justify-content: center; color: #f59e0b; flex-shrink: 0;">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 2 0 0 1 22 16.92z"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="brb-info-label" style="font-size: 0.75em; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Phone', 'black-rock-billing'); ?></span>
+                                </div>
+                                <span class="brb-info-value" style="font-size: 1.1em; color: #0f172a; font-weight: 600; display: block; margin-top: 4px;">
+                                    <a href="tel:<?php echo esc_attr($phone); ?>" style="color: #3b82f6; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; padding: 4px 0;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.7;">
+                                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 2 0 0 1 22 16.92z"></path>
+                                        </svg>
+                                        <span><?php echo esc_html($phone); ?></span>
+                                    </a>
+                                </span>
+                            </div>
+                            <?php endif; ?>
                         </div>
-                        <div class="brb-info-item">
-                            <span class="brb-info-label"><?php _e('Email:', 'black-rock-billing'); ?></span>
-                            <span class="brb-info-value">
-                                <a href="mailto:<?php echo esc_attr($customer->user_email); ?>">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                                        <polyline points="22,6 12,13 2,6"></polyline>
-                                    </svg>
-                                    <?php echo esc_html($customer->user_email); ?>
-                                </a>
-                            </span>
-                        </div>
-                        <?php if ($phone): ?>
-                        <div class="brb-info-item">
-                            <span class="brb-info-label"><?php _e('Phone:', 'black-rock-billing'); ?></span>
-                            <span class="brb-info-value">
-                                <a href="tel:<?php echo esc_attr($phone); ?>">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 2 0 0 1 22 16.92z"></path>
-                                    </svg>
-                                    <?php echo esc_html($phone); ?>
-                                </a>
-                            </span>
-                        </div>
-                        <?php endif; ?>
                     </div>
                 </div>
                 
                 <div class="brb-summary-cards">
-                    <div class="brb-summary-card">
+                    <div class="brb-summary-card" style="border-top: 7px solid #8b5cf6;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #8b5cf6;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                        </div>
                         <h3><?php _e('Total Bills', 'black-rock-billing'); ?></h3>
                         <p class="brb-amount"><?php echo count($bills); ?></p>
                     </div>
-                    <div class="brb-summary-card">
+                    <div class="brb-summary-card" style="border-top: 7px solid #3b82f6;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #3b82f6;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
                         <h3><?php _e('Total Billed', 'black-rock-billing'); ?></h3>
                         <p class="brb-amount"><?php echo brb_format_currency($total_billed); ?></p>
                     </div>
-                    <div class="brb-summary-card">
+                    <div class="brb-summary-card" style="border-top: 7px solid #10b981;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #10b981;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                        </div>
                         <h3><?php _e('Total Paid', 'black-rock-billing'); ?></h3>
                         <p class="brb-amount brb-paid"><?php echo brb_format_currency($total_paid); ?></p>
                     </div>
-                    <div class="brb-summary-card" style="border-top-color: <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
+                    <div class="brb-summary-card" style="border-top: 7px solid <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: <?php echo $net_pending >= 0 ? '#ef4444' : '#dc2626'; ?>;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
                         <h3><?php _e('Pending', 'black-rock-billing'); ?></h3>
                         <p class="brb-amount" style="color: <?php echo $net_pending >= 0 ? '#00a32a' : '#dc2626'; ?>;">
                             <?php echo $net_pending >= 0 ? '' : '-'; ?><?php echo brb_format_currency(abs($net_pending)); ?>
@@ -2016,13 +2182,13 @@ class BRB_Frontend {
                                 <?php _e('Edit Customer', 'black-rock-billing'); ?>
                             </a>
                             <a href="<?php echo esc_url(home_url('/billing-dashboard/create?brb_customer=' . $customer_id)); ?>" class="button button-primary">
-                                <?php _e('Create New Bill', 'black-rock-billing'); ?>
+                                <?php _e('Create New Invoice', 'black-rock-billing'); ?>
                             </a>
                         </div>
                     </div>
                     
                     <?php if (empty($bills)): ?>
-                        <p class="brb-no-bills"><?php _e('This customer has no bills yet.', 'black-rock-billing'); ?></p>
+                        <p class="brb-no-bills"><?php _e('This customer has no invoices yet.', 'black-rock-billing'); ?></p>
                     <?php else: ?>
                         <table class="brb-bills-table">
                             <thead>
@@ -2091,96 +2257,132 @@ class BRB_Frontend {
     public function render_settings() {
         get_header();
         ?>
-        <div class="brb-dashboard-container">
-            <div class="brb-dashboard-header">
+        <div class="brb-create-bill-container">
+            <div class="brb-page-header">
                 <h1><?php _e('Settings', 'black-rock-billing'); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/create')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <?php _e('Create Invoice', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/settings')); ?>" class="brb-nav-link active">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                        <?php _e('Settings', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <?php $this->render_navigation_menu('settings'); ?>
             </div>
             
             <?php if (isset($_GET['settings-updated'])): ?>
-                <div class="notice notice-success">
-                    <p><?php _e('Settings saved successfully!', 'black-rock-billing'); ?></p>
+                <div style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border: 2px solid #86efac; border-radius: 12px; padding: 16px 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 12px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #16a34a; flex-shrink: 0;">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <p style="margin: 0; color: #166534; font-weight: 600; font-size: 14px;"><?php _e('Settings saved successfully!', 'black-rock-billing'); ?></p>
                 </div>
             <?php endif; ?>
             
-            <div class="brb-settings-section">
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="brb-settings-form">
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden; margin-bottom: 25px;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <?php _e('General Settings', 'black-rock-billing'); ?>
+                    </h2>
+                </div>
+                
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="padding: 30px; display: flex; flex-direction: column; gap: 30px;">
                     <?php wp_nonce_field('brb_save_settings', 'brb_settings_nonce'); ?>
                     <input type="hidden" name="action" value="brb_save_settings" />
                     
-                    <div class="brb-form-section">
-                        <h2><?php _e('Currency Settings', 'black-rock-billing'); ?></h2>
+                    <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 30px;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 1.2em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            <?php _e('Currency Settings', 'black-rock-billing'); ?>
+                        </h3>
                         
-                        <div class="brb-form-row">
-                            <label for="brb_currency_symbol"><?php _e('Currency Symbol', 'black-rock-billing'); ?></label>
-                            <input type="text" id="brb_currency_symbol" name="brb_currency_symbol" 
-                                   value="<?php echo esc_attr(get_option('brb_currency_symbol', 'AED')); ?>" 
-                                   class="regular-text" />
-                            <p class="description"><?php _e('Symbol to use for currency display (e.g., AED, $, €, £)', 'black-rock-billing'); ?></p>
-                        </div>
-                        
-                        <div class="brb-form-row">
-                            <label for="brb_currency_position"><?php _e('Currency Position', 'black-rock-billing'); ?></label>
-                            <select id="brb_currency_position" name="brb_currency_position">
-                                <option value="before" <?php selected(get_option('brb_currency_position', 'before'), 'before'); ?>>
-                                    <?php _e('Before amount (AED 100)', 'black-rock-billing'); ?>
-                                </option>
-                                <option value="after" <?php selected(get_option('brb_currency_position', 'before'), 'after'); ?>>
-                                    <?php _e('After amount (100 AED)', 'black-rock-billing'); ?>
-                                </option>
-                            </select>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                            <div>
+                                <label for="brb_currency_symbol" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Currency Symbol', 'black-rock-billing'); ?></label>
+                                <input type="text" id="brb_currency_symbol" name="brb_currency_symbol" 
+                                       value="<?php echo esc_attr(get_option('brb_currency_symbol', 'AED')); ?>" 
+                                       style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                                <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Symbol to use for currency display (e.g., AED, $, €, £)', 'black-rock-billing'); ?></p>
+                            </div>
+                            
+                            <div>
+                                <label for="brb_currency_position" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Currency Position', 'black-rock-billing'); ?></label>
+                                <select id="brb_currency_position" name="brb_currency_position" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;">
+                                    <option value="before" <?php selected(get_option('brb_currency_position', 'before'), 'before'); ?>>
+                                        <?php _e('Before amount (AED 100)', 'black-rock-billing'); ?>
+                                    </option>
+                                    <option value="after" <?php selected(get_option('brb_currency_position', 'before'), 'after'); ?>>
+                                        <?php _e('After amount (100 AED)', 'black-rock-billing'); ?>
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="brb-form-section">
-                        <h2><?php _e('Bill Settings', 'black-rock-billing'); ?></h2>
+                    <div style="border-bottom: 1px solid #e2e8f0; padding-bottom: 30px;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 1.2em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <?php _e('Invoice Settings', 'black-rock-billing'); ?>
+                        </h3>
                         
-                        <div class="brb-form-row">
-                            <label for="brb_bill_prefix"><?php _e('Invoice Number Prefix', 'black-rock-billing'); ?></label>
+                        <div>
+                            <label for="brb_bill_prefix" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Invoice Number Prefix', 'black-rock-billing'); ?></label>
                             <input type="text" id="brb_bill_prefix" name="brb_bill_prefix" 
                                    value="<?php echo esc_attr(get_option('brb_bill_prefix', 'BILL')); ?>" 
-                                   class="regular-text" />
-                            <p class="description"><?php _e('Prefix for auto-generated invoice numbers (e.g., INV-2026-0001)', 'black-rock-billing'); ?></p>
+                                   style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Prefix for auto-generated invoice numbers (e.g., INV-2026-0001)', 'black-rock-billing'); ?></p>
                         </div>
                     </div>
                     
-                    <div class="brb-form-actions">
-                        <button type="submit" class="button button-primary button-large"><?php _e('Save Settings', 'black-rock-billing'); ?></button>
+                    <div>
+                        <h3 style="margin: 0 0 20px 0; font-size: 1.2em; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                            <?php _e('Company Information', 'black-rock-billing'); ?>
+                        </h3>
+                        <p style="margin: 0 0 20px 0; font-size: 14px; color: #64748b;"><?php _e('This information will be displayed on invoices and PDFs.', 'black-rock-billing'); ?></p>
+                        
+                        <div class="brb-company-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <label for="brb_company_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Company Name', 'black-rock-billing'); ?></label>
+                                <input type="text" id="brb_company_name" name="brb_company_name" 
+                                       value="<?php echo esc_attr(get_option('brb_company_name', get_bloginfo('name'))); ?>" 
+                                       style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                            </div>
+                            
+                            <div>
+                                <label for="brb_company_email" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Email', 'black-rock-billing'); ?></label>
+                                <input type="email" id="brb_company_email" name="brb_company_email" 
+                                       value="<?php echo esc_attr(get_option('brb_company_email', get_bloginfo('admin_email'))); ?>" 
+                                       style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                            </div>
+                            
+                            <div>
+                                <label for="brb_company_phone" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Phone', 'black-rock-billing'); ?></label>
+                                <input type="tel" id="brb_company_phone" name="brb_company_phone" 
+                                       value="<?php echo esc_attr(get_option('brb_company_phone', '')); ?>" 
+                                       style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="brb_company_address" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Address', 'black-rock-billing'); ?></label>
+                            <input type="text" id="brb_company_address" name="brb_company_address" 
+                                   value="<?php echo esc_attr(get_option('brb_company_address', '')); ?>" 
+                                   style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                        </div>
+                    </div>
+                    
+                    <div style="padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                        <button type="submit" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Save Settings', 'black-rock-billing'); ?></button>
                     </div>
                 </form>
             </div>
@@ -2212,7 +2414,7 @@ class BRB_Frontend {
         
         // Check if user can edit this bill
         if (!current_user_can('edit_post', $bill_id)) {
-            wp_send_json_error(array('message' => __('You do not have permission to edit this bill.', 'black-rock-billing')));
+            wp_send_json_error(array('message' => __('You do not have permission to edit this invoice.', 'black-rock-billing')));
         }
         
         // Save return items
@@ -2283,7 +2485,7 @@ class BRB_Frontend {
         
         // Check if user can edit this bill
         if (!current_user_can('edit_post', $bill_id)) {
-            wp_send_json_error(array('message' => __('You do not have permission to edit this bill.', 'black-rock-billing')));
+            wp_send_json_error(array('message' => __('You do not have permission to edit this invoice.', 'black-rock-billing')));
         }
         
         // Get form data
@@ -2300,6 +2502,24 @@ class BRB_Frontend {
             wp_send_json_error(array('message' => __('Please select a customer.', 'black-rock-billing')));
         }
         
+        // Get old items to restore inventory
+        $old_items = brb_get_bill_items($bill_id);
+        $old_return_items = brb_get_return_items($bill_id);
+        
+        // Restore inventory from old items
+        foreach ($old_items as $old_item) {
+            if (!empty($old_item['product_id']) && $old_item['product_id'] > 0 && $old_item['quantity'] > 0) {
+                brb_restore_product_quantity($old_item['product_id'], $old_item['quantity'], $bill_id, 'invoice_edit');
+            }
+        }
+        
+        // Restore inventory from old return items (returns reduce inventory, so restoring means deducting again)
+        foreach ($old_return_items as $old_return_item) {
+            if (!empty($old_return_item['product_id']) && $old_return_item['product_id'] > 0 && $old_return_item['quantity'] > 0) {
+                brb_deduct_product_quantity($old_return_item['product_id'], $old_return_item['quantity'], $bill_id, 'return_removed');
+            }
+        }
+        
         // Calculate total from items
         $total = 0;
         $clean_items = array();
@@ -2307,11 +2527,13 @@ class BRB_Frontend {
             if (!empty($item['description'])) {
                 $quantity = floatval($item['quantity'] ?? 0);
                 $rate = floatval($item['rate'] ?? 0);
+                $product_id = isset($item['product_id']) ? intval($item['product_id']) : 0;
                 $total += $quantity * $rate;
                 $clean_items[] = array(
                     'description' => sanitize_text_field($item['description']),
                     'quantity' => $quantity,
                     'rate' => $rate,
+                    'product_id' => $product_id,
                 );
             }
         }
@@ -2320,10 +2542,12 @@ class BRB_Frontend {
         $clean_return_items = array();
         foreach ($return_items as $item) {
             if (!empty($item['description'])) {
+                $product_id = isset($item['product_id']) ? intval($item['product_id']) : 0;
                 $clean_return_items[] = array(
                     'description' => sanitize_text_field($item['description']),
                     'quantity' => floatval($item['quantity'] ?? 0),
                     'rate' => floatval($item['rate'] ?? 0),
+                    'product_id' => $product_id,
                 );
             }
         }
@@ -2359,6 +2583,20 @@ class BRB_Frontend {
         }
         update_post_meta($bill_id, '_brb_refund_due', $refund_due);
         
+        // Deduct inventory for new items
+        foreach ($clean_items as $item) {
+            if (!empty($item['product_id']) && $item['product_id'] > 0 && $item['quantity'] > 0) {
+                brb_deduct_product_quantity($item['product_id'], $item['quantity'], $bill_id, 'sale');
+            }
+        }
+        
+        // Restore inventory for return items (returns add back to stock)
+        foreach ($clean_return_items as $return_item) {
+            if (!empty($return_item['product_id']) && $return_item['product_id'] > 0 && $return_item['quantity'] > 0) {
+                brb_restore_product_quantity($return_item['product_id'], $return_item['quantity'], $bill_id, 'return');
+            }
+        }
+        
         // Get old status before updating (for email notification)
         $old_status = get_post_meta($bill_id, '_brb_status', true);
         
@@ -2368,7 +2606,7 @@ class BRB_Frontend {
         }
         
         wp_send_json_success(array(
-            'message' => __('Bill updated successfully!', 'black-rock-billing'),
+            'message' => __('Invoice updated successfully!', 'black-rock-billing'),
             'bill_id' => $bill_id,
             'redirect_url' => home_url('/billing-dashboard/bill/' . $bill_id)
         ));
@@ -2383,53 +2621,53 @@ class BRB_Frontend {
         <div class="brb-create-bill-container">
             <div class="brb-page-header">
                 <h1><?php _e('Add New Customer', 'black-rock-billing'); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/add')); ?>" class="brb-nav-link active">
-                        <?php _e('Add Customer', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <?php $this->render_navigation_menu('customer-add'); ?>
             </div>
             
-            <form id="brb-add-customer-form" class="brb-bill-form">
-                <?php wp_nonce_field('brb_save_customer', 'brb_customer_nonce'); ?>
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
+                        <?php _e('Customer Information', 'black-rock-billing'); ?>
+                    </h2>
+                </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Customer Information', 'black-rock-billing'); ?></h2>
+                <form id="brb-add-customer-form" class="brb-bill-form" style="padding: 30px; border: 0; box-shadow: none;">
+                    <?php wp_nonce_field('brb_save_customer', 'brb_customer_nonce'); ?>
                     
-                    <div class="brb-form-grid">
+                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
                         <div class="brb-form-row">
-                            <label for="brb_customer_first_name"><?php _e('First Name', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="text" id="brb_customer_first_name" name="first_name" required class="brb-form-input" />
+                            <label for="brb_customer_first_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('First Name', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="text" id="brb_customer_first_name" name="first_name" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_customer_last_name"><?php _e('Last Name', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="text" id="brb_customer_last_name" name="last_name" required class="brb-form-input" />
+                            <label for="brb_customer_last_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Last Name', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="text" id="brb_customer_last_name" name="last_name" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_customer_email"><?php _e('Email', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="email" id="brb_customer_email" name="user_email" required class="brb-form-input" />
+                            <label for="brb_customer_email" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Email', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="email" id="brb_customer_email" name="user_email" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_customer_phone"><?php _e('Phone Number', 'black-rock-billing'); ?></label>
-                            <input type="tel" id="brb_customer_phone" name="billing_phone" class="brb-form-input" />
+                            <label for="brb_customer_phone" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Phone Number', 'black-rock-billing'); ?></label>
+                            <input type="tel" id="brb_customer_phone" name="billing_phone" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                     </div>
-                </div>
-                
-                <div class="brb-form-actions">
-                    <button type="submit" class="button button-primary"><?php _e('Create Customer', 'black-rock-billing'); ?></button>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="button"><?php _e('Cancel', 'black-rock-billing'); ?></a>
-                </div>
-            </form>
+                    
+                    <div class="brb-form-actions" style="padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                        <button type="submit" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Create Customer', 'black-rock-billing'); ?></button>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="button" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                    </div>
+                </form>
+            </div>
         </div>
         <?php
         get_footer();
@@ -2455,54 +2693,54 @@ class BRB_Frontend {
         <div class="brb-create-bill-container">
             <div class="brb-page-header">
                 <h1><?php _e('Edit Customer', 'black-rock-billing'); ?> - <?php echo esc_html(brb_format_customer_name($customer->display_name)); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers')); ?>" class="brb-nav-link">
-                        <?php _e('Customers', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/' . $customer_id)); ?>" class="brb-nav-link">
-                        <?php _e('View Customer', 'black-rock-billing'); ?>
-                    </a>
-                </div>
+                <?php $this->render_navigation_menu('customers'); ?>
             </div>
             
-            <form id="brb-edit-customer-form" class="brb-bill-form">
-                <?php wp_nonce_field('brb_save_customer', 'brb_customer_nonce'); ?>
-                <input type="hidden" name="customer_id" value="<?php echo esc_attr($customer_id); ?>" />
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <line x1="20" y1="8" x2="20" y2="14"></line>
+                            <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
+                        <?php _e('Customer Information', 'black-rock-billing'); ?>
+                    </h2>
+                </div>
                 
-                <div class="brb-form-section">
-                    <h2><?php _e('Customer Information', 'black-rock-billing'); ?></h2>
+                <form id="brb-edit-customer-form" class="brb-bill-form" style="padding: 30px; border: 0; box-shadow: none;">
+                    <?php wp_nonce_field('brb_save_customer', 'brb_customer_nonce'); ?>
+                    <input type="hidden" name="customer_id" value="<?php echo esc_attr($customer_id); ?>" />
                     
-                    <div class="brb-form-grid">
+                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
                         <div class="brb-form-row">
-                            <label for="brb_customer_first_name"><?php _e('First Name', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="text" id="brb_customer_first_name" name="first_name" value="<?php echo esc_attr($first_name); ?>" required class="brb-form-input" />
+                            <label for="brb_customer_first_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('First Name', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="text" id="brb_customer_first_name" name="first_name" value="<?php echo esc_attr($first_name); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_customer_last_name"><?php _e('Last Name', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="text" id="brb_customer_last_name" name="last_name" value="<?php echo esc_attr($last_name); ?>" required class="brb-form-input" />
+                            <label for="brb_customer_last_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Last Name', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="text" id="brb_customer_last_name" name="last_name" value="<?php echo esc_attr($last_name); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_customer_email"><?php _e('Email', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="email" id="brb_customer_email" name="user_email" value="<?php echo esc_attr($customer->user_email); ?>" required class="brb-form-input" />
+                            <label for="brb_customer_email" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Email', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="email" id="brb_customer_email" name="user_email" value="<?php echo esc_attr($customer->user_email); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_customer_phone"><?php _e('Phone Number', 'black-rock-billing'); ?></label>
-                            <input type="tel" id="brb_customer_phone" name="billing_phone" value="<?php echo esc_attr($phone); ?>" class="brb-form-input" />
+                            <label for="brb_customer_phone" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Phone Number', 'black-rock-billing'); ?></label>
+                            <input type="tel" id="brb_customer_phone" name="billing_phone" value="<?php echo esc_attr($phone); ?>" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
                         </div>
                     </div>
-                </div>
-                
-                <div class="brb-form-actions">
-                    <button type="submit" class="button button-primary"><?php _e('Update Customer', 'black-rock-billing'); ?></button>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/' . $customer_id)); ?>" class="button"><?php _e('Cancel', 'black-rock-billing'); ?></a>
-                </div>
-            </form>
+                    
+                    <div class="brb-form-actions" style="padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                        <button type="submit" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Update Customer', 'black-rock-billing'); ?></button>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/customers/' . $customer_id)); ?>" class="button" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                    </div>
+                </form>
+            </div>
         </div>
         <?php
         get_footer();
@@ -2595,71 +2833,90 @@ class BRB_Frontend {
         <div class="brb-create-bill-container">
             <div class="brb-page-header">
                 <h1><?php _e('Import Invoices', 'black-rock-billing'); ?></h1>
-                <div class="brb-dashboard-nav">
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                        </svg>
-                        <?php _e('Dashboard', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/bills')); ?>" class="brb-nav-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                        </svg>
-                        <?php _e('All Invoices', 'black-rock-billing'); ?>
-                    </a>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard/import')); ?>" class="brb-nav-link active">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <?php $this->render_navigation_menu('inventory'); ?>
+            </div>
+            
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <?php _e('Import CSV', 'black-rock-billing'); ?>
-                    </a>
+                        <?php _e('Import Invoices from CSV', 'black-rock-billing'); ?>
+                    </h2>
                 </div>
-            </div>
-            
-            <div class="brb-bill-form">
-                <div class="brb-form-section">
-                    <h2><?php _e('Import Invoices from CSV', 'black-rock-billing'); ?></h2>
-                    <p class="description"><?php _e('Upload a CSV file to import invoices. The CSV should match the export format with the following columns: Invoice Number, Date, Due Date, Customer Name, Customer Email, Customer Phone, Status, Original Total, Return Total, Adjusted Total, Paid Amount, Pending Amount, Refund Due, Items Count, Return Items Count, Notes.', 'black-rock-billing'); ?></p>
+                
+                <div style="padding: 30px;">
+                    <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #bae6fd; border-radius: 12px; padding: 20px; margin-bottom: 25px;">
+                        <div style="display: flex; align-items: start; gap: 12px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #0284c7; flex-shrink: 0; margin-top: 2px;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <div>
+                                <p style="margin: 0 0 8px 0; font-weight: 600; color: #0c4a6e; font-size: 14px;"><?php _e('CSV Format Requirements', 'black-rock-billing'); ?></p>
+                                <p style="margin: 0; color: #075985; font-size: 13px; line-height: 1.6;"><?php _e('The CSV should match the export format with the following columns: Invoice Number, Date, Due Date, Customer Name, Customer Email, Customer Phone, Status, Original Total, Return Total, Adjusted Total, Paid Amount, Pending Amount, Refund Due, Items Count, Return Items Count, Notes.', 'black-rock-billing'); ?></p>
+                            </div>
+                        </div>
+                    </div>
                     
                     <form id="brb-import-csv-form" enctype="multipart/form-data">
                         <?php wp_nonce_field('brb_import_csv', 'brb_import_nonce'); ?>
                         
-                        <div class="brb-form-row">
-                            <label for="brb_csv_file"><?php _e('CSV File', 'black-rock-billing'); ?> <span class="required">*</span></label>
-                            <input type="file" id="brb_csv_file" name="csv_file" accept=".csv" required class="brb-form-input" />
-                            <p class="description"><?php _e('Select a CSV file to import. Maximum file size: 10MB', 'black-rock-billing'); ?></p>
+                        <div class="brb-form-row" style="margin-bottom: 25px;">
+                            <label for="brb_csv_file" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('CSV File', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <div style="position: relative;">
+                                <input type="file" id="brb_csv_file" name="csv_file" accept=".csv" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; background: #fff; cursor: pointer;" />
+                            </div>
+                            <p class="description" style="margin: 8px 0 0 0; font-size: 13px; color: #64748b;"><?php _e('Select a CSV file to import. Maximum file size: 10MB', 'black-rock-billing'); ?></p>
                         </div>
                         
-                        <div class="brb-form-row">
-                            <label>
-                                <input type="checkbox" id="brb_skip_duplicates" name="skip_duplicates" value="1" checked />
-                                <?php _e('Skip duplicate invoices (by invoice number)', 'black-rock-billing'); ?>
+                        <div class="brb-form-row" style="margin-bottom: 25px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 16px; background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 8px; transition: all 0.3s; user-select: none;">
+                                <input type="checkbox" id="brb_skip_duplicates" name="skip_duplicates" value="1" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: #3b82f6;" />
+                                <span style="font-weight: 500; font-size: 14px; color: #475569;"><?php _e('Skip duplicate invoices (by invoice number)', 'black-rock-billing'); ?></span>
                             </label>
                         </div>
                         
-                        <div class="brb-form-actions">
-                            <button type="submit" class="button button-primary"><?php _e('Import Invoices', 'black-rock-billing'); ?></button>
-                            <a href="<?php echo esc_url(home_url('/billing-dashboard/bills')); ?>" class="button"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                        <div class="brb-form-actions" style="margin-top: 30px; padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                            <button type="submit" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 8px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <?php _e('Import Invoices', 'black-rock-billing'); ?>
+                            </button>
+                            <a href="<?php echo esc_url(home_url('/billing-dashboard/bills')); ?>" class="button" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                         </div>
                     </form>
                     
-                    <div id="brb-import-progress" style="display: none; margin-top: 20px;">
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #2563eb;">
-                            <p style="margin: 0; font-weight: 600; color: #1e293b;"><?php _e('Importing...', 'black-rock-billing'); ?></p>
-                            <p id="brb-import-status" style="margin: 8px 0 0 0; color: #64748b; font-size: 0.9em;"></p>
+                    <div id="brb-import-progress" style="display: none; margin-top: 25px;">
+                        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #3b82f6; animation: spin 1s linear infinite;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <p style="margin: 0; font-weight: 600; color: #1e40af; font-size: 15px;"><?php _e('Importing...', 'black-rock-billing'); ?></p>
+                            </div>
+                            <p id="brb-import-status" style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6;"></p>
                         </div>
                     </div>
                     
-                    <div id="brb-import-results" style="display: none; margin-top: 20px;"></div>
+                    <div id="brb-import-results" style="display: none; margin-top: 25px;"></div>
                 </div>
             </div>
+            
+            <style>
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+            </style>
         </div>
         <?php
         get_footer();
@@ -3194,6 +3451,936 @@ class BRB_Frontend {
         
         fclose($output);
         exit;
+    }
+    
+    /**
+     * AJAX: Search products
+     */
+    public function ajax_search_products() {
+        check_ajax_referer('brb_nonce', 'nonce');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error(array('message' => __('You must be logged in to search products.', 'black-rock-billing')));
+        }
+        
+        $search_term = isset($_POST['search']) ? sanitize_text_field($_POST['search']) : '';
+        
+        if (empty($search_term)) {
+            wp_send_json_success(array('products' => array()));
+        }
+        
+        $args = array(
+            'post_type' => 'brb_product',
+            'posts_per_page' => 20,
+            'post_status' => 'publish',
+            's' => $search_term,
+            'orderby' => 'title',
+            'order' => 'ASC'
+        );
+        
+        $products = get_posts($args);
+        
+        $results = array();
+        foreach ($products as $product) {
+            $purchased_from = get_post_meta($product->ID, '_brb_purchased_from', true);
+            $purchased_rate = get_post_meta($product->ID, '_brb_purchased_rate', true);
+            $sale_rate = get_post_meta($product->ID, '_brb_sale_rate', true);
+            
+            $quantity_available = brb_get_product_quantity($product->ID);
+            
+            $results[] = array(
+                'id' => $product->ID,
+                'name' => $product->post_title,
+                'purchased_from' => $purchased_from,
+                'purchased_rate' => floatval($purchased_rate),
+                'sale_rate' => floatval($sale_rate),
+                'quantity_available' => $quantity_available
+            );
+        }
+        
+        wp_send_json_success(array('products' => $results));
+    }
+    
+    /**
+     * AJAX: Get inventory history
+     */
+    public function ajax_get_inventory_history() {
+        check_ajax_referer('brb_nonce', 'nonce');
+        
+        if (!is_user_logged_in() || !current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => __('Permission denied.', 'black-rock-billing')));
+        }
+        
+        $product_id = intval($_POST['product_id'] ?? 0);
+        
+        if (!$product_id) {
+            wp_send_json_error(array('message' => __('Invalid product ID.', 'black-rock-billing')));
+        }
+        
+        $history = brb_get_inventory_history($product_id);
+        
+        wp_send_json_success(array('history' => $history));
+    }
+    
+    /**
+     * Render inventory page
+     */
+    public function render_inventory() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have permission to view inventory.', 'black-rock-billing'), __('Access Denied', 'black-rock-billing'), array('response' => 403));
+        }
+        
+        // Get all products
+        $args = array(
+            'post_type' => 'brb_product',
+            'posts_per_page' => -1,
+            'post_status' => 'publish',
+            'orderby' => 'title',
+            'order' => 'ASC'
+        );
+        
+        $products = get_posts($args);
+        
+        get_header();
+        ?>
+        <div class="brb-dashboard-container">
+            <div class="brb-dashboard-header">
+                <h1><?php _e('Inventory Management', 'black-rock-billing'); ?></h1>
+                <?php $this->render_navigation_menu('inventory'); ?>
+            </div>
+            
+            <div class="brb-inventory-container" style="background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                <div class="brb-inventory-header" style="display: flex; gap: 15px; align-items: flex-end; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; flex-wrap: wrap;">
+                    <input type="text" id="brb-search-inventory" placeholder="<?php _e('Search products...', 'black-rock-billing'); ?>" class="brb-form-input" style="flex: 1; min-width: 250px; max-width: 400px; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;" />
+                    <select id="brb-filter-stock" class="brb-form-select" style="min-width: 200px; max-width: 250px; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s; height: auto; min-height: 44px; box-sizing: border-box;">
+                        <option value=""><?php _e('All Stock Levels', 'black-rock-billing'); ?></option>
+                        <option value="in_stock"><?php _e('In Stock', 'black-rock-billing'); ?></option>
+                        <option value="low_stock"><?php _e('Low Stock (< 10)', 'black-rock-billing'); ?></option>
+                        <option value="out_of_stock"><?php _e('Out of Stock', 'black-rock-billing'); ?></option>
+                    </select>
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard/inventory/add')); ?>" class="button button-primary" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; font-weight: 600; text-decoration: none; white-space: nowrap; height: auto; min-height: 44px; box-sizing: border-box;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <?php _e('Add Product', 'black-rock-billing'); ?>
+                    </a>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                <table class="brb-items-table-frontend" id="brb-inventory-table" style="width: 100%; border-collapse: separate; border-spacing: 0; min-width: 1000px;">
+                    <thead>
+                        <tr style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                            <th style="padding: 16px 20px; text-align: left; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Product Name', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: left; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Purchased From', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: right; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Purchased Rate', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: right; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Sale Rate', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: right; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Stock Quantity', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: right; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Total Profit Potential', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: center; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Status', 'black-rock-billing'); ?></th>
+                            <th style="padding: 16px 20px; text-align: center; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #ffffff; border-bottom: 2px solid #1d4ed8; white-space: nowrap;"><?php _e('Actions', 'black-rock-billing'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody id="brb-inventory-tbody">
+                        <?php if (!empty($products)): ?>
+                            <?php foreach ($products as $product): ?>
+                                <?php
+                                $product_id = $product->ID;
+                                $purchased_from = get_post_meta($product_id, '_brb_purchased_from', true);
+                                $purchased_rate = floatval(get_post_meta($product_id, '_brb_purchased_rate', true));
+                                $sale_rate = floatval(get_post_meta($product_id, '_brb_sale_rate', true));
+                                $quantity = brb_get_product_quantity($product_id);
+                                
+                                // Calculate profit
+                                $profit_per_unit = $sale_rate - $purchased_rate;
+                                $total_profit_potential = $profit_per_unit * $quantity;
+                                
+                                // Determine status
+                                $status_class = 'in-stock';
+                                $status_text = __('In Stock', 'black-rock-billing');
+                                if ($quantity <= 0) {
+                                    $status_class = 'out-of-stock';
+                                    $status_text = __('Out of Stock', 'black-rock-billing');
+                                } elseif ($quantity < 10) {
+                                    $status_class = 'low-stock';
+                                    $status_text = __('Low Stock', 'black-rock-billing');
+                                }
+                                ?>
+                                <tr class="brb-inventory-row" data-product-name="<?php echo esc_attr(strtolower($product->post_title)); ?>" data-stock-status="<?php echo esc_attr($status_class); ?>" style="border-bottom: 1px solid #f1f5f9; transition: all 0.2s;">
+                                    <td style="padding: 18px 20px; font-size: 15px; color: #1e293b;">
+                                        <strong style="font-weight: 600; color: #0f172a;"><?php echo esc_html($product->post_title); ?></strong>
+                                    </td>
+                                    <td style="padding: 18px 20px; font-size: 14px; color: #64748b;">
+                                        <?php echo $purchased_from ? esc_html($purchased_from) : '<span style="color: #cbd5e1;">—</span>'; ?>
+                                    </td>
+                                    <td style="padding: 18px 20px; text-align: right; font-size: 14px; font-weight: 600; color: #475569;">
+                                        <?php echo $purchased_rate > 0 ? brb_format_currency($purchased_rate) : '<span style="color: #cbd5e1;">—</span>'; ?>
+                                    </td>
+                                    <td style="padding: 18px 20px; text-align: right; font-size: 14px; font-weight: 600; color: #475569;">
+                                        <?php echo $sale_rate > 0 ? brb_format_currency($sale_rate) : '<span style="color: #cbd5e1;">—</span>'; ?>
+                                    </td>
+                                    <td style="padding: 18px 20px; text-align: right; font-size: 15px;">
+                                        <span class="brb-stock-quantity brb-stock-<?php echo esc_attr($status_class); ?>" style="font-weight: 700; font-size: 15px; padding: 6px 12px; border-radius: 6px; display: inline-block; <?php echo $quantity <= 0 ? 'background: #fee2e2; color: #dc2626;' : ($quantity < 10 ? 'background: #fef3c7; color: #f59e0b;' : 'background: #d1fae5; color: #10b981;'); ?>">
+                                            <?php echo number_format($quantity, 2); ?>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 18px 20px; text-align: right; font-size: 15px;">
+                                        <?php if ($purchased_rate > 0 && $sale_rate > 0 && $quantity > 0): ?>
+                                            <span style="font-weight: 700; font-size: 15px; color: <?php echo $total_profit_potential >= 0 ? '#10b981' : '#dc2626'; ?>;">
+                                                <?php echo brb_format_currency($total_profit_potential); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span style="color: #cbd5e1;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="padding: 18px 20px; text-align: center;">
+                                        <span class="brb-status brb-status-<?php echo esc_attr($status_class); ?>" style="display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; <?php echo $status_class === 'out-of-stock' ? 'background: #fee2e2; color: #dc2626;' : ($status_class === 'low-stock' ? 'background: #fef3c7; color: #f59e0b;' : 'background: #d1fae5; color: #10b981;'); ?>">
+                                            <?php echo esc_html($status_text); ?>
+                                        </span>
+                                    </td>
+                                    <td style="padding: 18px 20px; text-align: center;">
+                                        <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                                            <a href="<?php echo esc_url(home_url('/billing-dashboard/inventory/edit/' . $product_id)); ?>" class="brb-action-btn brb-action-edit" title="<?php _e('Edit Product', 'black-rock-billing'); ?>" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; transition: all 0.2s; text-decoration: none;">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                </svg>
+                                            </a>
+                                            <button type="button" class="brb-action-btn brb-action-view brb-view-history-btn" data-product-id="<?php echo esc_attr($product_id); ?>" data-product-name="<?php echo esc_attr($product->post_title); ?>" title="<?php _e('View History', 'black-rock-billing'); ?>" style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; transition: all 0.2s; cursor: pointer;">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 60px 40px; background: #f8fafc;">
+                                    <div style="max-width: 400px; margin: 0 auto;">
+                                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #cbd5e1; margin: 0 auto 20px; display: block;">
+                                            <rect x="3" y="3" width="7" height="7"></rect>
+                                            <rect x="14" y="3" width="7" height="7"></rect>
+                                            <rect x="3" y="14" width="7" height="7"></rect>
+                                            <rect x="14" y="14" width="7" height="7"></rect>
+                                        </svg>
+                                        <p style="font-size: 16px; color: #64748b; margin-bottom: 20px; font-weight: 500;"><?php _e('No products found. Add products from WordPress Admin.', 'black-rock-billing'); ?></p>
+                                        <a href="<?php echo esc_url(admin_url('post-new.php?post_type=brb_product')); ?>" class="button button-primary" style="display: inline-block;"><?php _e('Add Product', 'black-rock-billing'); ?></a>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- History Modal -->
+        <div id="brb-history-modal" class="brb-modal-backdrop" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); z-index: 10000; overflow-y: auto; align-items: center; justify-content: center; padding: 20px; opacity: 0; transition: opacity 0.3s ease-in-out;">
+            <div class="brb-modal-content" style="max-width: 900px; width: 100%; margin: auto; background: white; border-radius: 16px; padding: 0; position: relative; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05); max-height: 90vh; overflow: hidden; transform: scale(0.95); transition: transform 0.3s ease-out, opacity 0.3s ease-out; opacity: 0;">
+                <!-- Modal Header -->
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <h2 id="brb-history-product-name" style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff; padding-right: 40px; line-height: 1.4;"></h2>
+                        <button type="button" id="brb-close-history-modal" style="position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.2); border: none; font-size: 24px; cursor: pointer; color: #ffffff; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: all 0.3s; flex-shrink: 0;" onmouseover="this.style.background='rgba(255, 255, 255, 0.3)'; this.style.transform='rotate(90deg)';" onmouseout="this.style.background='rgba(255, 255, 255, 0.2)'; this.style.transform='rotate(0deg)';">
+                            &times;
+                        </button>
+                    </div>
+                </div>
+                <!-- Modal Body -->
+                <div style="padding: 30px; max-height: calc(90vh - 100px); overflow-y: auto;">
+                    <div id="brb-history-content"></div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+        .brb-inventory-row:hover {
+            background: #f8fafc !important;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        #brb-search-inventory:focus, #brb-filter-stock:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        .brb-modal-backdrop {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        .brb-modal-backdrop.show {
+            opacity: 1 !important;
+        }
+        .brb-modal-backdrop.show .brb-modal-content {
+            transform: scale(1) translateY(0) !important;
+            opacity: 1 !important;
+        }
+        .brb-modal-content {
+            animation: slideUp 0.3s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        @keyframes slideUp {
+            from {
+                transform: scale(0.95) translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+        </style>
+        <script>
+        jQuery(document).ready(function($) {
+            // Filter inventory
+            function filterInventory() {
+                var searchTerm = $('#brb-search-inventory').val().toLowerCase();
+                var stockFilter = $('#brb-filter-stock').val();
+                var $rows = $('.brb-inventory-row');
+                var visibleCount = 0;
+                
+                $rows.each(function() {
+                    var $row = $(this);
+                    var productName = $row.data('product-name') || '';
+                    var stockStatus = $row.data('stock-status') || '';
+                    
+                    var matchesSearch = !searchTerm || productName.indexOf(searchTerm) !== -1;
+                    var matchesStock = !stockFilter || 
+                        (stockFilter === 'in_stock' && stockStatus === 'in-stock') ||
+                        (stockFilter === 'low_stock' && stockStatus === 'low-stock') ||
+                        (stockFilter === 'out_of_stock' && stockStatus === 'out-of-stock');
+                    
+                    if (matchesSearch && matchesStock) {
+                        $row.show();
+                        visibleCount++;
+                    } else {
+                        $row.hide();
+                    }
+                });
+            }
+            
+            $('#brb-search-inventory, #brb-filter-stock').on('input change', filterInventory);
+            
+            // View history
+            $('.brb-view-history-btn').on('click', function() {
+                var productId = $(this).data('product-id');
+                var productName = $(this).data('product-name');
+                
+                $('#brb-history-product-name').text(productName + ' - <?php _e('Inventory History', 'black-rock-billing'); ?>');
+                
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: {
+                        action: 'brb_get_inventory_history',
+                        nonce: '<?php echo wp_create_nonce('brb_nonce'); ?>',
+                        product_id: productId
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var history = response.data.history;
+                            var html = '<table style="width: 100%; border-collapse: collapse;">';
+                            html += '<thead><tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">';
+                            html += '<th style="padding: 10px; text-align: left;"><?php _e('Date/Time', 'black-rock-billing'); ?></th>';
+                            html += '<th style="padding: 10px; text-align: left;"><?php _e('Action', 'black-rock-billing'); ?></th>';
+                            html += '<th style="padding: 10px; text-align: right;"><?php _e('Old Qty', 'black-rock-billing'); ?></th>';
+                            html += '<th style="padding: 10px; text-align: right;"><?php _e('Change', 'black-rock-billing'); ?></th>';
+                            html += '<th style="padding: 10px; text-align: right;"><?php _e('New Qty', 'black-rock-billing'); ?></th>';
+                            html += '<th style="padding: 10px; text-align: left;"><?php _e('Invoice', 'black-rock-billing'); ?></th>';
+                            html += '</tr></thead><tbody>';
+                            
+                            if (history.length > 0) {
+                                history.forEach(function(entry) {
+                                    var changeClass = entry.change > 0 ? 'color: #10b981;' : 'color: #dc2626;';
+                                    var changeSign = entry.change > 0 ? '+' : '';
+                                    var actionText = entry.action === 'sale' ? '<?php _e('Sale', 'black-rock-billing'); ?>' :
+                                                    entry.action === 'return' ? '<?php _e('Return', 'black-rock-billing'); ?>' :
+                                                    entry.action === 'manual_update' ? '<?php _e('Manual Update', 'black-rock-billing'); ?>' :
+                                                    entry.action === 'stock_purchase' ? '<?php _e('Stock Purchase', 'black-rock-billing'); ?>' :
+                                                    entry.action === 'invoice_edit' ? '<?php _e('Invoice Edit', 'black-rock-billing'); ?>' :
+                                                    entry.action === 'return_removed' ? '<?php _e('Return Removed', 'black-rock-billing'); ?>' :
+                                                    entry.action;
+                                    
+                                    var invoiceLink = entry.invoice_id > 0 ? 
+                                        '<a href="<?php echo home_url('/billing-dashboard/bill/'); ?>' + entry.invoice_id + '">#' + entry.invoice_id + '</a>' : '—';
+                                    
+                                    html += '<tr style="border-bottom: 1px solid #e2e8f0;">';
+                                    html += '<td style="padding: 10px;">' + entry.timestamp + '</td>';
+                                    html += '<td style="padding: 10px;">' + actionText + '</td>';
+                                    html += '<td style="padding: 10px; text-align: right;">' + parseFloat(entry.old_quantity).toFixed(2) + '</td>';
+                                    html += '<td style="padding: 10px; text-align: right; ' + changeClass + '">' + changeSign + parseFloat(entry.change).toFixed(2) + '</td>';
+                                    html += '<td style="padding: 10px; text-align: right; font-weight: bold;">' + parseFloat(entry.new_quantity).toFixed(2) + '</td>';
+                                    html += '<td style="padding: 10px;">' + invoiceLink + '</td>';
+                                    html += '</tr>';
+                                });
+                            } else {
+                                html += '<tr><td colspan="6" style="padding: 20px; text-align: center;"><?php _e('No history available.', 'black-rock-billing'); ?></td></tr>';
+                            }
+                            
+                            html += '</tbody></table>';
+                            $('#brb-history-content').html(html);
+                            $('#brb-history-modal').css('display', 'flex');
+                            setTimeout(function() {
+                                $('#brb-history-modal').addClass('show');
+                            }, 10);
+                        }
+                    }
+                });
+            });
+            
+            $('#brb-close-history-modal, #brb-history-modal').on('click', function(e) {
+                if (e.target === this || $(e.target).attr('id') === 'brb-close-history-modal') {
+                    $('#brb-history-modal').removeClass('show');
+                    setTimeout(function() {
+                        $('#brb-history-modal').hide();
+                    }, 300);
+                }
+            });
+            
+            // Prevent modal from closing when clicking inside the content
+            $('.brb-modal-content').on('click', function(e) {
+                e.stopPropagation();
+            });
+        });
+        </script>
+        <?php
+        get_footer();
+    }
+    
+    /**
+     * Render add product page
+     */
+    public function render_add_product() {
+        get_header();
+        ?>
+        <div class="brb-create-bill-container">
+            <div class="brb-page-header">
+                <h1><?php _e('Add New Product', 'black-rock-billing'); ?></h1>
+                <?php $this->render_navigation_menu('inventory'); ?>
+            </div>
+            
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                        <?php _e('Product Information', 'black-rock-billing'); ?>
+                    </h2>
+                </div>
+                
+                <form id="brb-add-product-form" class="brb-bill-form" style="padding: 30px; border: 0; box-shadow: none;">
+                    <?php wp_nonce_field('brb_save_product', 'brb_product_nonce'); ?>
+                    
+                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                        <div class="brb-form-row" style="grid-column: 1 / -1;">
+                            <label for="brb_product_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Product Name', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="text" id="brb_product_name" name="product_name" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_purchased_from" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Purchased From', 'black-rock-billing'); ?></label>
+                            <input type="text" id="brb_purchased_from" name="purchased_from" class="brb-form-input" placeholder="<?php _e('Supplier or vendor name', 'black-rock-billing'); ?>" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_purchased_rate" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Purchased Rate', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_purchased_rate" name="purchased_rate" step="0.01" min="0" class="brb-form-input" placeholder="0.00" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Cost price per unit', 'black-rock-billing'); ?></p>
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_sale_rate" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Sale Rate', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_sale_rate" name="sale_rate" step="0.01" min="0" class="brb-form-input" placeholder="0.00" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Selling price per unit', 'black-rock-billing'); ?></p>
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_quantity_available" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Initial Stock Quantity', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_quantity_available" name="quantity_available" step="0.01" min="0" value="0" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Starting inventory quantity', 'black-rock-billing'); ?></p>
+                        </div>
+                    </div>
+                    
+                    <div class="brb-form-actions" style="padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                        <button type="submit" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Create Product', 'black-rock-billing'); ?></button>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/inventory')); ?>" class="button" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            $('#brb-add-product-form').on('submit', function(e) {
+                e.preventDefault();
+                
+                var formData = {
+                    action: 'brb_save_product',
+                    nonce: $('#brb_product_nonce').val(),
+                    product_name: $('#brb_product_name').val(),
+                    purchased_from: $('#brb_purchased_from').val(),
+                    purchased_rate: $('#brb_purchased_rate').val(),
+                    sale_rate: $('#brb_sale_rate').val(),
+                    quantity_available: $('#brb_quantity_available').val()
+                };
+                
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: formData,
+                    success: function(response) {
+                        if (response.success) {
+                            window.location.href = response.data.redirect;
+                        } else {
+                            alert(response.data.message || '<?php _e('Error saving product.', 'black-rock-billing'); ?>');
+                        }
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+        get_footer();
+    }
+    
+    /**
+     * Render edit product page
+     */
+    public function render_edit_product($product_id) {
+        $product = get_post($product_id);
+        
+        if (!$product || $product->post_type !== 'brb_product') {
+            wp_redirect(home_url('/billing-dashboard/inventory'));
+            exit;
+        }
+        
+        $purchased_from = get_post_meta($product_id, '_brb_purchased_from', true);
+        $purchased_rate = get_post_meta($product_id, '_brb_purchased_rate', true);
+        $sale_rate = get_post_meta($product_id, '_brb_sale_rate', true);
+        $quantity_available = get_post_meta($product_id, '_brb_quantity_available', true);
+        if ($quantity_available === '') {
+            $quantity_available = 0;
+        }
+        
+        get_header();
+        ?>
+        <div class="brb-create-bill-container">
+            <div class="brb-page-header">
+                <h1><?php _e('Edit Product', 'black-rock-billing'); ?> - <?php echo esc_html($product->post_title); ?></h1>
+                <?php $this->render_navigation_menu('inventory'); ?>
+            </div>
+            
+            <div style="background: #fff; border-radius: 16px; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <h2 style="margin: 0; color: #fff; font-size: 1.5em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.9;">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                        <?php _e('Product Information', 'black-rock-billing'); ?>
+                    </h2>
+                </div>
+                
+                <form id="brb-edit-product-form" class="brb-bill-form" style="padding: 30px; border: 0; box-shadow: none;">
+                    <?php wp_nonce_field('brb_save_product', 'brb_product_nonce'); ?>
+                    <input type="hidden" name="product_id" value="<?php echo esc_attr($product_id); ?>" />
+                    
+                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                        <div class="brb-form-row" style="grid-column: 1 / -1;">
+                            <label for="brb_product_name" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Product Name', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
+                            <input type="text" id="brb_product_name" name="product_name" value="<?php echo esc_attr($product->post_title); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_purchased_from" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Purchased From', 'black-rock-billing'); ?></label>
+                            <input type="text" id="brb_purchased_from" name="purchased_from" value="<?php echo esc_attr($purchased_from); ?>" class="brb-form-input" placeholder="<?php _e('Supplier or vendor name', 'black-rock-billing'); ?>" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_purchased_rate" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Purchased Rate', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_purchased_rate" name="purchased_rate" value="<?php echo esc_attr($purchased_rate); ?>" step="0.01" min="0" class="brb-form-input" placeholder="0.00" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Cost price per unit', 'black-rock-billing'); ?></p>
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_sale_rate" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Sale Rate', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_sale_rate" name="sale_rate" value="<?php echo esc_attr($sale_rate); ?>" step="0.01" min="0" class="brb-form-input" placeholder="0.00" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Selling price per unit', 'black-rock-billing'); ?></p>
+                        </div>
+                        
+                        <div class="brb-form-row">
+                            <label for="brb_quantity_available" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Stock Quantity', 'black-rock-billing'); ?></label>
+                            <input type="number" id="brb_quantity_available" name="quantity_available" value="<?php echo esc_attr($quantity_available); ?>" step="0.01" min="0" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <p class="description" style="margin-top: 8px; font-size: 13px; color: #64748b;"><?php _e('Current inventory quantity', 'black-rock-billing'); ?></p>
+                        </div>
+                    </div>
+                    
+                    <div class="brb-form-actions" style="padding-top: 25px; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
+                        <button type="submit" class="button button-primary" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Update Product', 'black-rock-billing'); ?></button>
+                        <a href="<?php echo esc_url(home_url('/billing-dashboard/inventory')); ?>" class="button" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            $('#brb-edit-product-form').on('submit', function(e) {
+                e.preventDefault();
+                
+                var formData = {
+                    action: 'brb_save_product',
+                    nonce: $('#brb_product_nonce').val(),
+                    product_id: $('input[name="product_id"]').val(),
+                    product_name: $('#brb_product_name').val(),
+                    purchased_from: $('#brb_purchased_from').val(),
+                    purchased_rate: $('#brb_purchased_rate').val(),
+                    sale_rate: $('#brb_sale_rate').val(),
+                    quantity_available: $('#brb_quantity_available').val()
+                };
+                
+                $.ajax({
+                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                    type: 'POST',
+                    data: formData,
+                    success: function(response) {
+                        if (response.success) {
+                            window.location.href = response.data.redirect;
+                        } else {
+                            alert(response.data.message || '<?php _e('Error saving product.', 'black-rock-billing'); ?>');
+                        }
+                    }
+                });
+            });
+        });
+        </script>
+        <?php
+        get_footer();
+    }
+    
+    /**
+     * AJAX: Save product (create or update)
+     */
+    public function ajax_save_product() {
+        check_ajax_referer('brb_save_product', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => __('You do not have permission to perform this action.', 'black-rock-billing')));
+        }
+        
+        $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
+        $product_name = sanitize_text_field($_POST['product_name'] ?? '');
+        $purchased_from = sanitize_text_field($_POST['purchased_from'] ?? '');
+        $purchased_rate = isset($_POST['purchased_rate']) ? floatval($_POST['purchased_rate']) : 0;
+        $sale_rate = isset($_POST['sale_rate']) ? floatval($_POST['sale_rate']) : 0;
+        $quantity_available = isset($_POST['quantity_available']) ? floatval($_POST['quantity_available']) : 0;
+        
+        if (empty($product_name)) {
+            wp_send_json_error(array('message' => __('Product name is required.', 'black-rock-billing')));
+        }
+        
+        if ($product_id) {
+            // Update existing product
+            $product = get_post($product_id);
+            if (!$product || $product->post_type !== 'brb_product') {
+                wp_send_json_error(array('message' => __('Invalid product ID.', 'black-rock-billing')));
+            }
+            
+            // Get old quantity for history tracking
+            $old_quantity = brb_get_product_quantity($product_id);
+            
+            wp_update_post(array(
+                'ID' => $product_id,
+                'post_title' => $product_name
+            ));
+            
+            update_post_meta($product_id, '_brb_purchased_from', $purchased_from);
+            update_post_meta($product_id, '_brb_purchased_rate', $purchased_rate);
+            update_post_meta($product_id, '_brb_sale_rate', $sale_rate);
+            
+            // Update quantity and track history if changed
+            if ($quantity_available != $old_quantity) {
+                update_post_meta($product_id, '_brb_quantity_available', $quantity_available);
+                brb_log_inventory_change($product_id, $old_quantity, $quantity_available, 'manual_update', 0);
+            }
+            
+            wp_send_json_success(array(
+                'message' => __('Product updated successfully.', 'black-rock-billing'),
+                'redirect' => home_url('/billing-dashboard/inventory')
+            ));
+        } else {
+            // Create new product
+            $new_product_id = wp_insert_post(array(
+                'post_title' => $product_name,
+                'post_type' => 'brb_product',
+                'post_status' => 'publish'
+            ));
+            
+            if (is_wp_error($new_product_id)) {
+                wp_send_json_error(array('message' => $new_product_id->get_error_message()));
+            }
+            
+            update_post_meta($new_product_id, '_brb_purchased_from', $purchased_from);
+            update_post_meta($new_product_id, '_brb_purchased_rate', $purchased_rate);
+            update_post_meta($new_product_id, '_brb_sale_rate', $sale_rate);
+            update_post_meta($new_product_id, '_brb_quantity_available', $quantity_available);
+            
+            // Log initial quantity
+            if ($quantity_available > 0) {
+                brb_log_inventory_change($new_product_id, 0, $quantity_available, 'stock_purchase', 0);
+            }
+            
+            wp_send_json_success(array(
+                'message' => __('Product created successfully.', 'black-rock-billing'),
+                'redirect' => home_url('/billing-dashboard/inventory')
+            ));
+        }
+    }
+    
+    /**
+     * Render reports page
+     */
+    public function render_reports() {
+        // Get date range from request
+        $date_range = isset($_GET['date_range']) ? sanitize_text_field($_GET['date_range']) : 'month';
+        $start_date = isset($_GET['start_date']) ? sanitize_text_field($_GET['start_date']) : '';
+        $end_date = isset($_GET['end_date']) ? sanitize_text_field($_GET['end_date']) : '';
+        
+        // Calculate dates based on range
+        $today = date('Y-m-d');
+        switch ($date_range) {
+            case 'week':
+                $start_date = date('Y-m-d', strtotime('monday this week'));
+                $end_date = date('Y-m-d', strtotime('sunday this week'));
+                break;
+            case 'month':
+                $start_date = date('Y-m-01');
+                $end_date = date('Y-m-t');
+                break;
+            case 'year':
+                $start_date = date('Y-01-01');
+                $end_date = date('Y-12-31');
+                break;
+            case 'all':
+                // Get the earliest invoice date or use a very early date
+                $first_bill = get_posts(array(
+                    'post_type' => 'brb_bill',
+                    'posts_per_page' => 1,
+                    'post_status' => 'publish',
+                    'orderby' => 'meta_value',
+                    'order' => 'ASC',
+                    'meta_key' => '_brb_bill_date'
+                ));
+                
+                if (!empty($first_bill)) {
+                    $first_date = get_post_meta($first_bill[0]->ID, '_brb_bill_date', true);
+                    $start_date = $first_date ? $first_date : '2000-01-01';
+                } else {
+                    $start_date = '2000-01-01';
+                }
+                $end_date = $today;
+                break;
+            case 'custom':
+                if (empty($start_date)) {
+                    $start_date = date('Y-m-01');
+                }
+                if (empty($end_date)) {
+                    $end_date = $today;
+                }
+                break;
+            default:
+                $start_date = date('Y-m-01');
+                $end_date = date('Y-m-t');
+        }
+        
+        // Calculate totals
+        $total_sales = brb_calculate_total_sales($start_date, $end_date);
+        $total_profit = brb_calculate_total_profit($start_date, $end_date);
+        $total_credits = brb_calculate_total_credits($start_date, $end_date);
+        $invoice_count = brb_get_invoice_count($start_date, $end_date);
+        $pending_amount = $total_sales - $total_credits;
+        
+        get_header();
+        ?>
+        <div class="brb-dashboard-container">
+            <div class="brb-dashboard-header">
+                <h1><?php _e('Reports & Analytics', 'black-rock-billing'); ?></h1>
+                <?php $this->render_navigation_menu('reports'); ?>
+            </div>
+            
+            <div class="brb-reports-container" style="padding: 20px;">
+                <!-- Date Range Filter -->
+                <div class="brb-reports-filters" style="background: #fff; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+                    <form method="get" action="<?php echo esc_url(home_url('/billing-dashboard/reports')); ?>" style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+                        <div style="flex: 0 0 auto; min-width: 220px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Date Range', 'black-rock-billing'); ?></label>
+                            <select name="date_range" id="brb-date-range" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s; font-weight: 500; color: #1e293b; height: auto; min-height: 44px; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59, 130, 246, 0.1)';" onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                                <option value="week" <?php selected($date_range, 'week'); ?>><?php _e('This Week', 'black-rock-billing'); ?></option>
+                                <option value="month" <?php selected($date_range, 'month'); ?>><?php _e('This Month', 'black-rock-billing'); ?></option>
+                                <option value="year" <?php selected($date_range, 'year'); ?>><?php _e('This Year', 'black-rock-billing'); ?></option>
+                                <option value="all" <?php selected($date_range, 'all'); ?>><?php _e('All Time', 'black-rock-billing'); ?></option>
+                                <option value="custom" <?php selected($date_range, 'custom'); ?>><?php _e('Custom Range', 'black-rock-billing'); ?></option>
+                            </select>
+                        </div>
+                        <div id="brb-custom-dates" style="display: <?php echo $date_range === 'custom' ? 'flex' : 'none'; ?>; gap: 15px; flex: 1; min-width: 400px; align-items: flex-end; animation: slideDown 0.3s ease-out;">
+                            <div style="flex: 1; min-width: 180px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px; color: #64748b;">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    <?php _e('Start Date', 'black-rock-billing'); ?>
+                                </label>
+                                <input type="date" name="start_date" value="<?php echo esc_attr($start_date); ?>" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; transition: all 0.3s; font-weight: 500; color: #1e293b; height: auto; min-height: 44px; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59, 130, 246, 0.1)'; this.style.background='#f8fafc';" onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; this.style.background='#fff';">
+                            </div>
+                            <div style="flex: 0 0 auto; padding-bottom: 28px; color: #94a3b8; font-weight: 600; font-size: 18px;">→</div>
+                            <div style="flex: 1; min-width: 180px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px; color: #64748b;">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    <?php _e('End Date', 'black-rock-billing'); ?>
+                                </label>
+                                <input type="date" name="end_date" value="<?php echo esc_attr($end_date); ?>" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; transition: all 0.3s; font-weight: 500; color: #1e293b; height: auto; min-height: 44px; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59, 130, 246, 0.1)'; this.style.background='#f8fafc';" onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; this.style.background='#fff';">
+                            </div>
+                        </div>
+                        <div style="flex: 0 0 auto;">
+                            <button type="submit" class="button button-primary" style="padding: 12px 28px; height: auto; min-height: 44px; font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                </svg>
+                                <?php _e('Apply Filter', 'black-rock-billing'); ?>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <style>
+                @keyframes slideDown {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                #brb-custom-dates {
+                    transition: all 0.3s ease-out;
+                }
+                </style>
+                
+                <!-- Summary Cards -->
+                <div class="brb-reports-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                    <div class="brb-summary-card" style="background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-top: 7px solid #3b82f6; position: relative; overflow: hidden;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #3b82f6;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Total Sales', 'black-rock-billing'); ?></h3>
+                        <p class="brb-amount" style="font-size: 28px; font-weight: 700; color: #1f2937; margin: 0 0 8px 0; line-height: 1.2;"><?php echo brb_format_currency($total_sales); ?></p>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;"><?php printf(__('%d invoices', 'black-rock-billing'), $invoice_count); ?></div>
+                    </div>
+                    
+                    <div class="brb-summary-card" style="background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-top: 7px solid #10b981; position: relative; overflow: hidden;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #10b981;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="2" x2="12" y2="22"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Total Profit', 'black-rock-billing'); ?></h3>
+                        <p class="brb-amount" style="font-size: 28px; font-weight: 700; color: <?php echo $total_profit >= 0 ? '#10b981' : '#dc2626'; ?>; margin: 0 0 8px 0; line-height: 1.2;"><?php echo brb_format_currency($total_profit); ?></p>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;"><?php _e('From inventory products', 'black-rock-billing'); ?></div>
+                    </div>
+                    
+                    <div class="brb-summary-card" style="background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-top: 7px solid #f59e0b; position: relative; overflow: hidden;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #f59e0b;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Total Credits (Paid)', 'black-rock-billing'); ?></h3>
+                        <p class="brb-amount" style="font-size: 28px; font-weight: 700; color: #1f2937; margin: 0 0 8px 0; line-height: 1.2;"><?php echo brb_format_currency($total_credits); ?></p>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;"><?php _e('Amount received', 'black-rock-billing'); ?></div>
+                    </div>
+                    
+                    <div class="brb-summary-card" style="background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-top: 7px solid #ef4444; position: relative; overflow: hidden;">
+                        <div class="brb-summary-card-icon" style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; color: #ef4444;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 14px; color: #6b7280; margin: 0 0 8px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Pending Amount', 'black-rock-billing'); ?></h3>
+                        <p class="brb-amount" style="font-size: 28px; font-weight: 700; color: #1f2937; margin: 0 0 8px 0; line-height: 1.2;"><?php echo brb_format_currency($pending_amount); ?></p>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;"><?php _e('Outstanding', 'black-rock-billing'); ?></div>
+                    </div>
+                </div>
+                
+                <!-- Date Range Display -->
+                <div style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <p style="margin: 0; color: #6b7280;">
+                        <strong><?php _e('Report Period:', 'black-rock-billing'); ?></strong> 
+                        <?php if ($date_range === 'all'): ?>
+                            <?php _e('All Time', 'black-rock-billing'); ?>
+                            <?php if ($start_date !== '2000-01-01'): ?>
+                                (<?php echo date_i18n(get_option('date_format'), strtotime($start_date)); ?> 
+                                <?php _e('to', 'black-rock-billing'); ?> 
+                                <?php echo date_i18n(get_option('date_format'), strtotime($end_date)); ?>)
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <?php echo date_i18n(get_option('date_format'), strtotime($start_date)); ?> 
+                            <?php _e('to', 'black-rock-billing'); ?> 
+                            <?php echo date_i18n(get_option('date_format'), strtotime($end_date)); ?>
+                        <?php endif; ?>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            $('#brb-date-range').on('change', function() {
+                var $customDates = $('#brb-custom-dates');
+                if ($(this).val() === 'custom') {
+                    $customDates.css('display', 'flex').hide().fadeIn(300);
+                } else {
+                    $customDates.fadeOut(200, function() {
+                        $(this).css('display', 'none');
+                    });
+                }
+            });
+        });
+        </script>
+        <?php
+        get_footer();
     }
 }
 

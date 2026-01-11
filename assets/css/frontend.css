@@ -82,12 +82,12 @@ a.button-large {
 }
 
 .brb-dashboard-header h1 {
-    font-size: 3em;
+    font-size: 2.5em;
     margin-bottom: 15px;
     color: #1a1a1a;
     font-weight: 700;
     letter-spacing: -0.5px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d3748 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -470,6 +470,18 @@ th .brb-icon-btn {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.brb-info-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    border-color: #cbd5e1;
+}
+
+.brb-info-item a:hover {
+    color: #2563eb !important;
+    text-decoration: underline;
 }
 
 .brb-info-label {
@@ -534,8 +546,6 @@ th .brb-icon-btn {
     color: #0f172a;
     font-weight: 700;
     letter-spacing: -0.3px;
-    padding-bottom: 15px;
-    border-bottom: 3px solid #3b82f6;
     display: inline-block;
     width: 100%;
 }
@@ -612,16 +622,6 @@ th .brb-icon-btn {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
-}
-
-.brb-summary-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #8b5cf6 0%, #3b82f6 100%);
 }
 
 .brb-summary-card:hover {
@@ -1234,7 +1234,7 @@ th .brb-icon-btn {
     color: #0f172a;
     font-weight: 800;
     letter-spacing: -0.5px;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -1263,8 +1263,6 @@ th .brb-icon-btn {
     color: #0f172a;
     font-weight: 800;
     letter-spacing: -0.4px;
-    padding-bottom: 15px;
-    border-bottom: 3px solid #3b82f6;
     display: inline-block;
     width: 100%;
 }
@@ -1371,11 +1369,11 @@ input#brb_bill_number {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    margin-top: 20px;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
+
 
 .brb-items-table-frontend th,
 .brb-items-table-frontend td {
@@ -1415,6 +1413,31 @@ input#brb_bill_number {
     border-top: 3px solid #e2e8f0;
     padding: 18px;
     font-size: 1.1em;
+}
+
+/* Product search dropdown */
+.brb-product-search-wrapper {
+    position: relative;
+}
+
+/* Inventory filters */
+.brb-inventory-filters {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.brb-inventory-filters .brb-form-input {
+    flex: 1;
+    min-width: 250px;
+    max-width: 400px;
+}
+
+.brb-inventory-filters .brb-form-select {
+    min-width: 200px;
+    max-width: 250px;
 }
 
 .brb-item-row-frontend input {
@@ -1866,6 +1889,10 @@ input#brb_bill_number {
     .brb-action-btn svg {
         width: 14px;
         height: 14px;
+    }
+    
+    .brb-company-info-grid {
+        grid-template-columns: 1fr !important;
     }
 }
 

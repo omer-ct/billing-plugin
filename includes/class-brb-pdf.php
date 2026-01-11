@@ -221,9 +221,21 @@ class BRB_PDF {
         <body>
             <div class="header">
                 <div class="company-info">
-                    <h1><?php echo esc_html(get_bloginfo('name')); ?></h1>
-                    <?php if (get_bloginfo('description')): ?>
-                        <p><?php echo esc_html(get_bloginfo('description')); ?></p>
+                    <?php 
+                    $company_name = get_option('brb_company_name', get_bloginfo('name'));
+                    $company_email = get_option('brb_company_email', get_bloginfo('admin_email'));
+                    $company_phone = get_option('brb_company_phone', '');
+                    $company_address = get_option('brb_company_address', '');
+                    ?>
+                    <h1><?php echo esc_html($company_name); ?></h1>
+                    <?php if ($company_address): ?>
+                        <p><?php echo esc_html($company_address); ?></p>
+                    <?php endif; ?>
+                    <?php if ($company_email): ?>
+                        <p><?php echo esc_html($company_email); ?></p>
+                    <?php endif; ?>
+                    <?php if ($company_phone): ?>
+                        <p><?php echo esc_html($company_phone); ?></p>
                     <?php endif; ?>
                 </div>
                 <div class="bill-info">

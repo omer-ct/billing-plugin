@@ -136,7 +136,7 @@ class BRB_Customers {
                                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                                 </svg>
                                             </a>
-                                            <a href="<?php echo esc_url(add_query_arg(array('post_type' => 'brb_bill', 'brb_customer' => $customer->ID), admin_url('post-new.php'))); ?>" class="brb-action-btn brb-action-bill" title="<?php _e('Create Bill', 'black-rock-billing'); ?>">
+                                            <a href="<?php echo esc_url(add_query_arg(array('post_type' => 'brb_bill', 'brb_customer' => $customer->ID), admin_url('post-new.php'))); ?>" class="brb-action-btn brb-action-bill" title="<?php _e('Create Invoice', 'black-rock-billing'); ?>">
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                                     <polyline points="14 2 14 8 20 8"></polyline>
@@ -265,20 +265,20 @@ class BRB_Customers {
                     
                     <div class="brb-bills-actions">
                         <a href="<?php echo esc_url(add_query_arg(array('post_type' => 'brb_bill', 'brb_customer' => $customer_id), admin_url('post-new.php'))); ?>" class="button button-primary">
-                            <?php _e('Create New Bill', 'black-rock-billing'); ?>
+                            <?php _e('Create New Invoice', 'black-rock-billing'); ?>
                         </a>
                         <a href="<?php echo esc_url(add_query_arg(array('post_type' => 'brb_bill', 'brb_customer' => $customer_id), admin_url('edit.php'))); ?>" class="button">
-                            <?php _e('View All Bills', 'black-rock-billing'); ?>
+                            <?php _e('View All Invoices', 'black-rock-billing'); ?>
                         </a>
                     </div>
                     
                     <?php if (empty($bills)): ?>
-                        <p><?php _e('This customer has no bills yet.', 'black-rock-billing'); ?></p>
+                        <p><?php _e('This customer has no invoices yet.', 'black-rock-billing'); ?></p>
                     <?php else: ?>
                         <table class="wp-list-table widefat fixed striped">
                             <thead>
                                 <tr>
-                                    <th><?php _e('Bill Number', 'black-rock-billing'); ?></th>
+                                    <th><?php _e('Invoice Number', 'black-rock-billing'); ?></th>
                                     <th><?php _e('Date', 'black-rock-billing'); ?></th>
                                     <th><?php _e('Due Date', 'black-rock-billing'); ?></th>
                                     <th><?php _e('Total', 'black-rock-billing'); ?></th>

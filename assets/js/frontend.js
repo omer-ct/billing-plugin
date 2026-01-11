@@ -28,9 +28,99 @@
                 }
             });
             newRow.find('.brb-item-total').text(brb_format_currency(0));
+            newRow.find('.brb-product-dropdown').hide().empty();
+            newRow.find('.brb-item-product-id').val('');
             
             $('#brb-items-tbody-frontend').append(newRow);
             itemIndex++;
+        });
+        
+        // Product search functionality
+        var productSearchTimeout;
+        $(document).on('input', '.brb-item-description', function() {
+            var $input = $(this);
+            var $wrapper = $input.closest('.brb-product-search-wrapper');
+            var $dropdown = $wrapper.find('.brb-product-dropdown');
+            var searchTerm = $input.val().trim();
+            
+            clearTimeout(productSearchTimeout);
+            
+            // Hide dropdown if search is too short
+            if (searchTerm.length < 2) {
+                $dropdown.hide().empty();
+                return;
+            }
+            
+            // Debounce search
+            productSearchTimeout = setTimeout(function() {
+                $.ajax({
+                    url: brbData.ajaxUrl,
+                    type: 'POST',
+                    data: {
+                        action: 'brb_search_products',
+                        nonce: brbData.nonce,
+                        search: searchTerm
+                    },
+                    success: function(response) {
+                        if (response.success && response.data.products.length > 0) {
+                            var html = '';
+                            response.data.products.forEach(function(product) {
+                                var stockClass = product.quantity_available <= 0 ? 'color: #dc2626;' : (product.quantity_available < 10 ? 'color: #f59e0b;' : 'color: #10b981;');
+                                html += '<div class="brb-product-item" data-product-id="' + product.id + '" data-product-name="' + product.name + '" data-sale-rate="' + product.sale_rate + '" data-quantity-available="' + product.quantity_available + '" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;">';
+                                html += '<strong>' + product.name + '</strong>';
+                                if (product.sale_rate > 0) {
+                                    html += '<br><small style="color: #666;">Sale Rate: ' + brb_format_currency(product.sale_rate) + '</small>';
+                                }
+                                html += '<br><small style="' + stockClass + '">Stock: ' + parseFloat(product.quantity_available).toFixed(2) + '</small>';
+                                html += '</div>';
+                            });
+                            $dropdown.html(html).show();
+                        } else {
+                            $dropdown.hide().empty();
+                        }
+                    },
+                    error: function() {
+                        $dropdown.hide().empty();
+                    }
+                });
+            }, 300);
+        });
+        
+        // Handle product selection
+        $(document).on('click', '.brb-product-item', function() {
+            var $item = $(this);
+            var $wrapper = $item.closest('.brb-product-search-wrapper');
+            var $row = $wrapper.closest('.brb-item-row-frontend');
+            var productId = $item.data('product-id');
+            var productName = $item.data('product-name');
+            var saleRate = parseFloat($item.data('sale-rate')) || 0;
+            var quantityAvailable = parseFloat($item.data('quantity-available')) || 0;
+            
+            // Fill in the product details
+            $wrapper.find('.brb-item-description').val(productName);
+            $wrapper.find('.brb-item-product-id').val(productId);
+            if (saleRate > 0) {
+                $row.find('.brb-item-rate').val(saleRate);
+                // Trigger calculation
+                $row.find('.brb-item-rate').trigger('input');
+            }
+            
+            // Show available quantity warning if low stock
+            if (quantityAvailable <= 0) {
+                alert('Warning: This product is out of stock!');
+            } else if (quantityAvailable < 10) {
+                alert('Warning: Low stock! Only ' + quantityAvailable + ' available.');
+            }
+            
+            // Hide dropdown
+            $wrapper.find('.brb-product-dropdown').hide().empty();
+        });
+        
+        // Hide dropdown when clicking outside
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.brb-product-search-wrapper').length) {
+                $('.brb-product-dropdown').hide();
+            }
         });
         
         // Remove item (frontend form)

@@ -421,3 +421,254 @@ function brb_save_customer($customer_data) {
     return $user_id;
 }
 
+/**
+ * Get product by name (for inventory lookup)
+ */
+function brb_get_product_by_name($product_name) {
+    $args = array(
+        'post_type' => 'brb_product',
+        'post_status' => 'publish',
+        'title' => $product_name,
+        'posts_per_page' => 1
+    );
+    
+    $products = get_posts($args);
+    return !empty($products) ? $products[0] : null;
+}
+
+/**
+ * Get product quantity available
+ */
+function brb_get_product_quantity($product_id) {
+    $quantity = get_post_meta($product_id, '_brb_quantity_available', true);
+    return $quantity !== '' ? floatval($quantity) : 0;
+}
+
+/**
+ * Deduct product quantity
+ */
+function brb_deduct_product_quantity($product_id, $quantity_to_deduct, $invoice_id = 0, $action = 'sale') {
+    $current_quantity = brb_get_product_quantity($product_id);
+    $new_quantity = max(0, $current_quantity - $quantity_to_deduct);
+    
+    update_post_meta($product_id, '_brb_quantity_available', $new_quantity);
+    
+    // Track history
+    $history = get_post_meta($product_id, '_brb_inventory_history', true);
+    if (!is_array($history)) {
+        $history = array();
+    }
+    
+    $entry = array(
+        'timestamp' => current_time('mysql'),
+        'old_quantity' => $current_quantity,
+        'new_quantity' => $new_quantity,
+        'change' => -$quantity_to_deduct,
+        'action' => $action,
+        'user_id' => get_current_user_id(),
+        'invoice_id' => $invoice_id,
+        'quantity_sold' => $quantity_to_deduct
+    );
+    
+    array_unshift($history, $entry);
+    
+    // Keep only last 100 entries
+    if (count($history) > 100) {
+        $history = array_slice($history, 0, 100);
+    }
+    
+    update_post_meta($product_id, '_brb_inventory_history', $history);
+    
+    return $new_quantity;
+}
+
+/**
+ * Restore product quantity (for returns/cancellations)
+ */
+function brb_restore_product_quantity($product_id, $quantity_to_restore, $invoice_id = 0, $action = 'return') {
+    $current_quantity = brb_get_product_quantity($product_id);
+    $new_quantity = $current_quantity + $quantity_to_restore;
+    
+    update_post_meta($product_id, '_brb_quantity_available', $new_quantity);
+    
+    // Track history
+    $history = get_post_meta($product_id, '_brb_inventory_history', true);
+    if (!is_array($history)) {
+        $history = array();
+    }
+    
+    $entry = array(
+        'timestamp' => current_time('mysql'),
+        'old_quantity' => $current_quantity,
+        'new_quantity' => $new_quantity,
+        'change' => $quantity_to_restore,
+        'action' => $action,
+        'user_id' => get_current_user_id(),
+        'invoice_id' => $invoice_id,
+        'quantity_sold' => 0
+    );
+    
+    array_unshift($history, $entry);
+    
+    // Keep only last 100 entries
+    if (count($history) > 100) {
+        $history = array_slice($history, 0, 100);
+    }
+    
+    update_post_meta($product_id, '_brb_inventory_history', $history);
+    
+    return $new_quantity;
+}
+
+/**
+ * Get inventory history for a product
+ */
+function brb_get_inventory_history($product_id) {
+    $history = get_post_meta($product_id, '_brb_inventory_history', true);
+    return is_array($history) ? $history : array();
+}
+
+/**
+ * Log inventory change
+ */
+function brb_log_inventory_change($product_id, $old_quantity, $new_quantity, $action = 'manual_update', $invoice_id = 0) {
+    $history = get_post_meta($product_id, '_brb_inventory_history', true);
+    if (!is_array($history)) {
+        $history = array();
+    }
+    
+    $entry = array(
+        'timestamp' => current_time('mysql'),
+        'old_quantity' => floatval($old_quantity),
+        'new_quantity' => floatval($new_quantity),
+        'change' => floatval($new_quantity) - floatval($old_quantity),
+        'action' => $action,
+        'user_id' => get_current_user_id(),
+        'invoice_id' => $invoice_id,
+        'quantity_sold' => 0
+    );
+    
+    array_unshift($history, $entry);
+    
+    // Keep only last 100 entries
+    if (count($history) > 100) {
+        $history = array_slice($history, 0, 100);
+    }
+    
+    update_post_meta($product_id, '_brb_inventory_history', $history);
+}
+
+/**
+ * Get bills within a date range
+ */
+function brb_get_bills_by_date_range($start_date, $end_date) {
+    $args = array(
+        'post_type' => 'brb_bill',
+        'posts_per_page' => -1,
+        'post_status' => 'publish',
+        'meta_query' => array(
+            'relation' => 'AND',
+            array(
+                'key' => '_brb_bill_date',
+                'value' => $start_date,
+                'compare' => '>=',
+                'type' => 'DATE'
+            ),
+            array(
+                'key' => '_brb_bill_date',
+                'value' => $end_date,
+                'compare' => '<=',
+                'type' => 'DATE'
+            )
+        ),
+        'orderby' => 'meta_value',
+        'order' => 'ASC',
+        'meta_key' => '_brb_bill_date'
+    );
+    
+    return get_posts($args);
+}
+
+/**
+ * Calculate total sales for a date range
+ */
+function brb_calculate_total_sales($start_date, $end_date) {
+    $bills = brb_get_bills_by_date_range($start_date, $end_date);
+    $total_sales = 0;
+    
+    foreach ($bills as $bill) {
+        $adjusted_total = brb_get_adjusted_bill_total($bill->ID);
+        $total_sales += $adjusted_total;
+    }
+    
+    return $total_sales;
+}
+
+/**
+ * Calculate total profit for a date range (only for inventory products)
+ */
+function brb_calculate_total_profit($start_date, $end_date) {
+    $bills = brb_get_bills_by_date_range($start_date, $end_date);
+    $total_profit = 0;
+    
+    foreach ($bills as $bill) {
+        $items = brb_get_bill_items($bill->ID);
+        
+        foreach ($items as $item) {
+            if (isset($item['product_id']) && $item['product_id'] > 0) {
+                $product_id = intval($item['product_id']);
+                $quantity = floatval($item['quantity'] ?? 0);
+                
+                $purchased_rate = floatval(get_post_meta($product_id, '_brb_purchased_rate', true));
+                $sale_rate = floatval($item['rate'] ?? 0);
+                
+                if ($purchased_rate > 0 && $sale_rate > 0) {
+                    $profit_per_unit = $sale_rate - $purchased_rate;
+                    $total_profit += $profit_per_unit * $quantity;
+                }
+            }
+        }
+        
+        // Subtract returns
+        $return_items = brb_get_return_items($bill->ID);
+        foreach ($return_items as $return_item) {
+            if (isset($return_item['product_id']) && $return_item['product_id'] > 0) {
+                $product_id = intval($return_item['product_id']);
+                $quantity = floatval($return_item['quantity'] ?? 0);
+                
+                $purchased_rate = floatval(get_post_meta($product_id, '_brb_purchased_rate', true));
+                $sale_rate = floatval($return_item['rate'] ?? 0);
+                
+                if ($purchased_rate > 0 && $sale_rate > 0) {
+                    $profit_per_unit = $sale_rate - $purchased_rate;
+                    $total_profit -= $profit_per_unit * $quantity; // Subtract profit from returns
+                }
+            }
+        }
+    }
+    
+    return $total_profit;
+}
+
+/**
+ * Calculate total credits (paid amounts) for a date range
+ */
+function brb_calculate_total_credits($start_date, $end_date) {
+    $bills = brb_get_bills_by_date_range($start_date, $end_date);
+    $total_credits = 0;
+    
+    foreach ($bills as $bill) {
+        $paid_amount = brb_get_paid_amount($bill->ID);
+        $total_credits += $paid_amount;
+    }
+    
+    return $total_credits;
+}
+
+/**
+ * Get number of invoices in a date range
+ */
+function brb_get_invoice_count($start_date, $end_date) {
+    $bills = brb_get_bills_by_date_range($start_date, $end_date);
+    return count($bills);
+}

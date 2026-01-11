@@ -23,6 +23,10 @@ class BRB_Post_Types {
         add_filter('manage_edit-brb_bill_sortable_columns', array($this, 'sortable_columns'));
         add_action('restrict_manage_posts', array($this, 'add_customer_filter'));
         add_filter('parse_query', array($this, 'filter_by_customer'));
+        
+        // Product columns
+        add_filter('manage_brb_product_posts_columns', array($this, 'add_product_columns'));
+        add_action('manage_brb_product_posts_custom_column', array($this, 'render_product_columns'), 10, 2);
     }
     
     /**
@@ -74,6 +78,43 @@ class BRB_Post_Types {
         );
         
         register_post_type('brb_bill', $args);
+        
+        // Register Product CPT
+        $product_labels = array(
+            'name'                  => _x('Products', 'Post type general name', 'black-rock-billing'),
+            'singular_name'         => _x('Product', 'Post type singular name', 'black-rock-billing'),
+            'menu_name'             => _x('Products', 'Admin Menu text', 'black-rock-billing'),
+            'name_admin_bar'        => _x('Product', 'Add New on Toolbar', 'black-rock-billing'),
+            'add_new'               => __('Add New', 'black-rock-billing'),
+            'add_new_item'          => __('Add New Product', 'black-rock-billing'),
+            'new_item'              => __('New Product', 'black-rock-billing'),
+            'edit_item'             => __('Edit Product', 'black-rock-billing'),
+            'view_item'             => __('View Product', 'black-rock-billing'),
+            'all_items'             => __('All Products', 'black-rock-billing'),
+            'search_items'          => __('Search Products', 'black-rock-billing'),
+            'parent_item_colon'     => __('Parent Products:', 'black-rock-billing'),
+            'not_found'             => __('No products found.', 'black-rock-billing'),
+            'not_found_in_trash'    => __('No products found in Trash.', 'black-rock-billing'),
+        );
+        
+        $product_args = array(
+            'labels'             => $product_labels,
+            'public'             => false,
+            'publicly_queryable' => false,
+            'show_ui'            => true,
+            'show_in_menu'       => true,
+            'query_var'          => true,
+            'rewrite'            => array('slug' => 'product'),
+            'capability_type'    => 'post',
+            'has_archive'        => false,
+            'hierarchical'       => false,
+            'menu_position'      => 31,
+            'menu_icon'          => 'dashicons-products',
+            'supports'           => array('title'),
+            'show_in_rest'       => false,
+        );
+        
+        register_post_type('brb_product', $product_args);
     }
     
     /**
@@ -278,6 +319,52 @@ class BRB_Post_Types {
             
             $query->query_vars['meta_key'] = '_brb_customer_id';
             $query->query_vars['meta_value'] = $customer_id;
+        }
+    }
+    
+    /**
+     * Add custom columns to products list
+     */
+    public function add_product_columns($columns) {
+        $new_columns = array();
+        
+        $new_columns['cb'] = $columns['cb'];
+        $new_columns['title'] = __('Product Name', 'black-rock-billing');
+        $new_columns['brb_purchased_from'] = __('Purchased From', 'black-rock-billing');
+        $new_columns['brb_purchased_rate'] = __('Purchased Rate', 'black-rock-billing');
+        $new_columns['brb_sale_rate'] = __('Sale Rate', 'black-rock-billing');
+        $new_columns['brb_quantity_available'] = __('Stock Quantity', 'black-rock-billing');
+        $new_columns['date'] = $columns['date'];
+        
+        return $new_columns;
+    }
+    
+    /**
+     * Render product column content
+     */
+    public function render_product_columns($column, $post_id) {
+        switch ($column) {
+            case 'brb_purchased_from':
+                $purchased_from = get_post_meta($post_id, '_brb_purchased_from', true);
+                echo $purchased_from ? esc_html($purchased_from) : '—';
+                break;
+                
+            case 'brb_purchased_rate':
+                $purchased_rate = get_post_meta($post_id, '_brb_purchased_rate', true);
+                echo $purchased_rate ? brb_format_currency($purchased_rate) : '—';
+                break;
+                
+            case 'brb_sale_rate':
+                $sale_rate = get_post_meta($post_id, '_brb_sale_rate', true);
+                echo $sale_rate ? brb_format_currency($sale_rate) : '—';
+                break;
+                
+            case 'brb_quantity_available':
+                $quantity = get_post_meta($post_id, '_brb_quantity_available', true);
+                $quantity = $quantity !== '' ? floatval($quantity) : 0;
+                $class = $quantity <= 0 ? 'style="color: #dc2626; font-weight: bold;"' : ($quantity < 10 ? 'style="color: #f59e0b; font-weight: bold;"' : '');
+                echo '<span ' . $class . '>' . number_format($quantity, 2) . '</span>';
+                break;
         }
     }
 }

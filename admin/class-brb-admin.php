@@ -16,8 +16,19 @@ class BRB_Admin {
      * Constructor
      */
     public function __construct() {
+        add_action('admin_init', array($this, 'check_dashboard_redirect'), 1);
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+    }
+    
+    /**
+     * Check and redirect dashboard page early
+     */
+    public function check_dashboard_redirect() {
+        if (isset($_GET['page']) && $_GET['page'] === 'brb-dashboard' && isset($_GET['post_type']) && $_GET['post_type'] === 'brb_bill') {
+            wp_redirect(home_url('/billing-dashboard'));
+            exit;
+        }
     }
     
     /**
@@ -50,12 +61,20 @@ class BRB_Admin {
     
     /**
      * Redirect to frontend dashboard
+     * Note: This is a fallback, the actual redirect happens in check_dashboard_redirect()
      */
     public function redirect_to_dashboard() {
-        wp_redirect(home_url('/billing-dashboard'));
-        exit;
+        // Redirect should have already happened in check_dashboard_redirect()
+        // But if we reach here, redirect anyway
+        if (!headers_sent()) {
+            wp_redirect(home_url('/billing-dashboard'));
+            exit;
+        } else {
+            // If headers already sent, use JavaScript redirect
+            echo '<script>window.location.href = "' . esc_js(home_url('/billing-dashboard')) . '";</script>';
+            exit;
+        }
     }
-    
     
     /**
      * Register settings
@@ -90,7 +109,7 @@ class BRB_Admin {
         
         add_settings_field(
             'brb_bill_prefix',
-            __('Bill Number Prefix', 'black-rock-billing'),
+            __('Invoice Number Prefix', 'black-rock-billing'),
             array($this, 'render_bill_prefix_field'),
             'brb-settings',
             'brb_general_settings'
@@ -132,7 +151,7 @@ class BRB_Admin {
     public function render_bill_prefix_field() {
         $value = get_option('brb_bill_prefix', 'BILL');
         echo '<input type="text" name="brb_bill_prefix" value="' . esc_attr($value) . '" class="regular-text" />';
-        echo '<p class="description">' . __('Prefix for auto-generated bill numbers (e.g., BILL-2026-0001)', 'black-rock-billing') . '</p>';
+        echo '<p class="description">' . __('Prefix for auto-generated invoice numbers (e.g., INV-2026-0001)', 'black-rock-billing') . '</p>';
     }
     
     /**
