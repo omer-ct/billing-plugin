@@ -335,7 +335,7 @@ class BRB_Frontend {
             <div class="brb-bills-section">
                 <div class="brb-bills-header">
                     <h2><?php _e('Your Invoices', 'black-rock-billing'); ?></h2>
-                    <div style="display: flex; gap: 10px; align-items: center;">
+                    <div class="brb-header-actions">
                         <?php if (!empty($bills)): ?>
                             <a href="<?php echo esc_url(add_query_arg(array('brb_export_csv' => '1'), home_url('/billing-dashboard'))); ?>" class="button" style="display: inline-flex; align-items: center; gap: 6px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -921,30 +921,30 @@ class BRB_Frontend {
                             <?php _e('Invoice Information', 'black-rock-billing'); ?>
                         </h2>
                     </div>
-                    <div style="padding: 0 30px;">
-                    <div class="brb-form-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 30px;">
+                    <div class="brb-form-content">
+                    <div class="brb-form-grid brb-form-grid-top">
                         <div class="brb-form-row">
-                            <label for="brb_customer_search" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Customer', 'black-rock-billing'); ?> <span class="required" style="color: #ef4444;">*</span></label>
-                            <div class="brb-customer-search-wrapper" style="position: relative;">
-                                <input type="text" id="brb_customer_search" class="brb-form-input" placeholder="<?php _e('Type to search customer...', 'black-rock-billing'); ?>" value="<?php echo esc_attr($preselected_display); ?>" autocomplete="off" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <label for="brb_customer_search" class="brb-form-label"><?php _e('Customer', 'black-rock-billing'); ?> <span class="required">*</span></label>
+                            <div class="brb-customer-search-wrapper brb-customer-search-wrapper-base">
+                                <input type="text" id="brb_customer_search" class="brb-form-input" placeholder="<?php _e('Type to search customer...', 'black-rock-billing'); ?>" value="<?php echo esc_attr($preselected_display); ?>" autocomplete="off" />
                                 <input type="hidden" id="brb_customer_id" name="brb_customer_id" value="<?php echo esc_attr($preselected_customer); ?>" required />
                                 <div id="brb-customer-dropdown" class="brb-customer-dropdown"></div>
                             </div>
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_bill_date" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
-                            <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo date('Y-m-d'); ?>" required class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <label for="brb_bill_date" class="brb-form-label"><?php _e('Invoice Date', 'black-rock-billing'); ?></label>
+                            <input type="date" id="brb_bill_date" name="brb_bill_date" value="<?php echo date('Y-m-d'); ?>" required class="brb-form-input" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_due_date" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Due Date', 'black-rock-billing'); ?></label>
-                            <input type="date" id="brb_due_date" name="brb_due_date" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                            <label for="brb_due_date" class="brb-form-label"><?php _e('Due Date', 'black-rock-billing'); ?></label>
+                            <input type="date" id="brb_due_date" name="brb_due_date" class="brb-form-input" />
                         </div>
                         
                         <div class="brb-form-row">
-                            <label for="brb_status" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Status', 'black-rock-billing'); ?></label>
-                            <select id="brb_status" name="brb_status" class="brb-form-select" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s;">
+                            <label for="brb_status" class="brb-form-label"><?php _e('Status', 'black-rock-billing'); ?></label>
+                            <select id="brb_status" name="brb_status" class="brb-form-select">
                                 <option value="draft" selected><?php _e('Draft', 'black-rock-billing'); ?></option>
                                 <option value="sent"><?php _e('Sent', 'black-rock-billing'); ?></option>
                                 <option value="paid"><?php _e('Paid', 'black-rock-billing'); ?></option>
@@ -953,15 +953,15 @@ class BRB_Frontend {
                         </div>
                     </div>
                     
-                    <div class="brb-form-row brb-form-row-full" style="margin-top: 20px; margin-bottom: 30px;">
-                        <label for="brb_bill_notes" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Notes', 'black-rock-billing'); ?></label>
-                        <textarea id="brb_bill_notes" name="brb_bill_notes" rows="4" class="brb-form-textarea brb-form-textarea-full" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;"></textarea>
+                    <div class="brb-form-row brb-form-row-full brb-form-row-full-base">
+                        <label for="brb_bill_notes" class="brb-form-label"><?php _e('Notes', 'black-rock-billing'); ?></label>
+                        <textarea id="brb_bill_notes" name="brb_bill_notes" rows="4" class="brb-form-textarea brb-form-textarea-full"></textarea>
                     </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
-                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                <div class="brb-form-section brb-form-section-base">
+                    <h2 class="brb-section-header-base">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
@@ -1020,8 +1020,8 @@ class BRB_Frontend {
                     </div>
                 </div>
                 
-                <div class="brb-form-section" style="background: transparent; border-radius: 0; padding: 0 30px; box-shadow: none; border: none; margin-bottom: 0;">
-                    <h2 style="margin: 0; padding: 0 0 15px 0; color: #1e293b; font-size: 1.3em; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f1f5f9;">
+                <div class="brb-form-section brb-form-section-base">
+                    <h2 class="brb-section-header-base">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #64748b;">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                             <polyline points="22 4 12 14.01 9 11.01"></polyline>
@@ -1030,15 +1030,15 @@ class BRB_Frontend {
                     </h2>
                     <div>
                         <div class="brb-form-row" style="max-width: 400px;">
-                        <label for="brb_paid_amount" style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569;"><?php _e('Paid Amount', 'black-rock-billing'); ?></label>
-                        <input type="number" id="brb_paid_amount" name="brb_paid_amount" step="0.01" min="0" value="0" class="brb-form-input" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s;" />
+                        <label for="brb_paid_amount" class="brb-form-label"><?php _e('Paid Amount', 'black-rock-billing'); ?></label>
+                        <input type="number" id="brb_paid_amount" name="brb_paid_amount" step="0.01" min="0" value="0" class="brb-form-input" />
                     </div>
                     </div>
                 </div>
                 
-                <div class="brb-form-actions" style="padding: 25px 30px 0; border-top: 2px solid #f1f5f9; display: flex; gap: 15px; justify-content: flex-start;">
-                    <button type="submit" class="button button-primary button-large" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Create Invoice', 'black-rock-billing'); ?></button>
-                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="button button-large" style="padding: 14px 32px; font-weight: 600; font-size: 15px;"><?php _e('Cancel', 'black-rock-billing'); ?></a>
+                <div class="brb-form-actions brb-form-actions-base" style="padding: 25px 30px 0;">
+                    <button type="submit" class="button button-primary button-large brb-form-button-base"><?php _e('Create Invoice', 'black-rock-billing'); ?></button>
+                    <a href="<?php echo esc_url(home_url('/billing-dashboard')); ?>" class="button button-large brb-form-button-base"><?php _e('Cancel', 'black-rock-billing'); ?></a>
                 </div>
                 
                 <div id="brb-form-messages"></div>
@@ -1783,7 +1783,7 @@ class BRB_Frontend {
             <div class="brb-bills-section">
                 <div class="brb-bills-header">
                     <h2><?php _e('All Invoices', 'black-rock-billing'); ?></h2>
-                    <div style="display: flex; gap: 10px; align-items: center;">
+                    <div class="brb-header-actions">
                         <?php if (!empty($bills)): ?>
                             <a href="<?php echo esc_url(add_query_arg(array('brb_export_csv' => '1'), home_url('/billing-dashboard/bills'))); ?>" class="button" style="display: inline-flex; align-items: center; gap: 6px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4222,13 +4222,13 @@ class BRB_Frontend {
                 <?php $this->render_navigation_menu('reports'); ?>
             </div>
             
-            <div class="brb-reports-container" style="padding: 20px;">
+            <div class="brb-reports-container">
                 <!-- Date Range Filter -->
-                <div class="brb-reports-filters" style="background: #fff; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
-                    <form method="get" action="<?php echo esc_url(home_url('/billing-dashboard/reports')); ?>" style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
-                        <div style="flex: 0 0 auto; min-width: 220px;">
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;"><?php _e('Date Range', 'black-rock-billing'); ?></label>
-                            <select name="date_range" id="brb-date-range" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; transition: all 0.3s; font-weight: 500; color: #1e293b; height: auto; min-height: 44px; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59, 130, 246, 0.1)';" onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                <div class="brb-reports-filters">
+                    <form method="get" action="<?php echo esc_url(home_url('/billing-dashboard/reports')); ?>" class="brb-reports-form">
+                        <div class="brb-reports-field">
+                            <label class="brb-reports-label"><?php _e('Date Range', 'black-rock-billing'); ?></label>
+                            <select name="date_range" id="brb-date-range" class="brb-reports-select">
                                 <option value="week" <?php selected($date_range, 'week'); ?>><?php _e('This Week', 'black-rock-billing'); ?></option>
                                 <option value="month" <?php selected($date_range, 'month'); ?>><?php _e('This Month', 'black-rock-billing'); ?></option>
                                 <option value="year" <?php selected($date_range, 'year'); ?>><?php _e('This Year', 'black-rock-billing'); ?></option>
@@ -4236,10 +4236,10 @@ class BRB_Frontend {
                                 <option value="custom" <?php selected($date_range, 'custom'); ?>><?php _e('Custom Range', 'black-rock-billing'); ?></option>
                             </select>
                         </div>
-                        <div id="brb-custom-dates" style="display: <?php echo $date_range === 'custom' ? 'flex' : 'none'; ?>; gap: 15px; flex: 1; min-width: 400px; align-items: flex-end; animation: slideDown 0.3s ease-out;">
-                            <div style="flex: 1; min-width: 180px;">
-                                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px; color: #64748b;">
+                        <div id="brb-custom-dates" class="brb-custom-dates" style="display: <?php echo $date_range === 'custom' ? 'flex' : 'none'; ?>;">
+                            <div class="brb-custom-date-field">
+                                <label class="brb-reports-label">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="brb-label-icon">
                                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                         <line x1="16" y1="2" x2="16" y2="6"></line>
                                         <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -4247,12 +4247,12 @@ class BRB_Frontend {
                                     </svg>
                                     <?php _e('Start Date', 'black-rock-billing'); ?>
                                 </label>
-                                <input type="date" name="start_date" value="<?php echo esc_attr($start_date); ?>" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; transition: all 0.3s; font-weight: 500; color: #1e293b; height: auto; min-height: 44px; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59, 130, 246, 0.1)'; this.style.background='#f8fafc';" onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; this.style.background='#fff';">
+                                <input type="date" name="start_date" value="<?php echo esc_attr($start_date); ?>" class="brb-reports-input" />
                             </div>
-                            <div style="flex: 0 0 auto; padding-bottom: 28px; color: #94a3b8; font-weight: 600; font-size: 18px;">→</div>
-                            <div style="flex: 1; min-width: 180px;">
-                                <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px; color: #64748b;">
+                            <div class="brb-date-separator">→</div>
+                            <div class="brb-custom-date-field">
+                                <label class="brb-reports-label">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="brb-label-icon">
                                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                         <line x1="16" y1="2" x2="16" y2="6"></line>
                                         <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -4260,12 +4260,12 @@ class BRB_Frontend {
                                     </svg>
                                     <?php _e('End Date', 'black-rock-billing'); ?>
                                 </label>
-                                <input type="date" name="end_date" value="<?php echo esc_attr($end_date); ?>" style="width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #fff; transition: all 0.3s; font-weight: 500; color: #1e293b; height: auto; min-height: 44px; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 4px rgba(59, 130, 246, 0.1)'; this.style.background='#f8fafc';" onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'; this.style.background='#fff';">
+                                <input type="date" name="end_date" value="<?php echo esc_attr($end_date); ?>" class="brb-reports-input" />
                             </div>
                         </div>
-                        <div style="flex: 0 0 auto;">
-                            <button type="submit" class="button button-primary" style="padding: 12px 28px; height: auto; min-height: 44px; font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); box-sizing: border-box; display: flex; align-items: center; justify-content: center;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                        <div class="brb-reports-submit">
+                            <button type="submit" class="button button-primary brb-reports-button">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="brb-button-icon">
                                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                                 </svg>
                                 <?php _e('Apply Filter', 'black-rock-billing'); ?>
